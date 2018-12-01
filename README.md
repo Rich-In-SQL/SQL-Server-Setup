@@ -1,1 +1,1 @@
-SQL Server Setup
+SQL Setup
