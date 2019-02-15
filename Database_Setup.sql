@@ -86,19 +86,19 @@ SET @operator_email = 'the.dba@test.com'
 SET @PartOfAG = 0
 
 --Default location for data files, leave blank to make no canges
-SET @DefaultData = ' '
+SET @DefaultData = 'D:\'
 
 --Default location for log files, leave blank to make no canges
-SET @DefaultLog = 'L:'
+SET @DefaultLog = 'L:\'
 
 --Default location for backup files, leave blank to make no canges
-SET @DefaultBackup = 'B:'
+SET @DefaultBackup = 'B:\'
 
 --Default location for the SQL Agent Log, leave blank to make no canges
-SET @AgentLog = 'C:\Program Files\Microsoft SQL Server\MSSQL13.MSSQLSERVER\MSSQL\fog\SQLAGENT.OUT'
+SET @AgentLog = 'F:\SQLAGENT.OUT'
 
---
-SET @TempDBLocation = 'D:\'
+--Set the location of where you would like TempDB to go
+SET @TempDBLocation = 'T:\'
 
 --Maximum server memory you would like to assign to this instance 
 SET @MaxServerMemory = '3000'
@@ -125,28 +125,28 @@ SET @CompressBackups = 1
 
 ************************************************************/
 
-INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-VALUES
-(0.1,'Script Details',NULL,NULL),
-(0.2,'Script Version',CAST(@ScriptVersion as varchar) ,NULL),
-(0.3,'Script Author','Bonza Owl',NULL),
-(0.5,'Last Updated','07/10/2018',NULL),
-(0.6,'Run Date',CONVERT(varchar(20),GETDATE()),NULL),
-(0.7,'Run By',SYSTEM_USER,NULL),
-(1.0,'SQL Server Version',NULL,NULL),
-(1.1,'Product Version',@ProductVersion,NULL),
-(1.2,'Product Version Major',CAST(@ProductVersionMajor as varchar),NULL),
-(1.3,'Product Version Minor',CAST(@ProductVersionMinor as varchar),NULL)
-
 IF @Testing = 1 
 
 BEGIN
 
 	INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
 	VALUES
-	(0.4,'*TEST MODE*',NULL,'No Changes made to the configuration, this is a dry run')
+	(0.0,'*TEST MODE*',NULL,'No Changes made to the configuration, this is a dry run')
 
 END
+
+INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
+VALUES
+(0.1,'Script Details',NULL,NULL),
+(0.2,'Script Version',CAST(@ScriptVersion as varchar) ,NULL),
+(0.3,'Script Author','Bonza Owl',NULL),
+(0.4,'Last Updated','07/10/2018',NULL),
+(0.5,'Run Date',CONVERT(varchar(20),GETDATE()),NULL),
+(0.7,'Run By',SYSTEM_USER,NULL),
+(1.0,'SQL Server Version',NULL,NULL),
+(1.1,'Product Version',@ProductVersion,NULL),
+(1.2,'Product Version Major',CAST(@ProductVersionMajor as varchar),NULL),
+(1.3,'Product Version Minor',CAST(@ProductVersionMinor as varchar),NULL)
 
 /************************************************************
 
@@ -172,19 +172,19 @@ IF @Testing = 0
 
 BEGIN
 
-EXEC sys.sp_configure N'show advanced options', N'1'  RECONFIGURE WITH OVERRIDE;
+	EXEC sys.sp_configure N'show advanced options', N'1'  RECONFIGURE WITH OVERRIDE;
 
-EXEC sys.sp_configure N'max server memory (MB)', @MaxServerMemory;
+	EXEC sys.sp_configure N'max server memory (MB)', @MaxServerMemory;
 
-RECONFIGURE WITH OVERRIDE;
+	RECONFIGURE WITH OVERRIDE;
 
-EXEC sys.sp_configure N'show advanced options', N'0'  RECONFIGURE WITH OVERRIDE;
+	EXEC sys.sp_configure N'show advanced options', N'0'  RECONFIGURE WITH OVERRIDE;
 
 END
 
 INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
 VALUES
-(2,'Max Server Memory',NULL,'These are the settings you have selected to use for this install'),
+(2.0,'Max Server Memory',NULL,'These are the settings you have selected to use for this install'),
 (2.1,'Max Server Memory Allocated',@MaxServerMemory,NULL)
 
 
@@ -207,22 +207,28 @@ BEGIN
 
     BEGIN
 
-        EXEC sys.sp_configure N'show advanced options', N'1'  RECONFIGURE WITH OVERRIDE;
+		IF @Testing = 0
 
-        EXEC sys.sp_configure N'max degree of parallelism', @DegreeOfParalelism;
+		BEGIN
 
-        RECONFIGURE WITH OVERRIDE;
+			EXEC sys.sp_configure N'show advanced options', N'1'  RECONFIGURE WITH OVERRIDE;
 
-        EXEC sys.sp_configure N'show advanced options', N'0'  RECONFIGURE WITH OVERRIDE;
+			EXEC sys.sp_configure N'max degree of parallelism', @DegreeOfParalelism;
+
+			RECONFIGURE WITH OVERRIDE;
+
+			EXEC sys.sp_configure N'show advanced options', N'0'  RECONFIGURE WITH OVERRIDE;
+
+		END
 
     END
 
-END
+	INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
+	VALUES
+	(3.0,'Max degree of parallelism',NULL,'These are the settings you have selected to use for this install'),
+	(3.1,'Max degree of parallelism configured',@DegreeOfParalelism,NULL)
 
-INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-VALUES
-(3,'Max degree of parallelism',NULL,'These are the settings you have selected to use for this install'),
-(3.1,'Max degree of parallelism configured',@DegreeOfParalelism,NULL)
+END
 
 /************************************************************
 
@@ -230,13 +236,10 @@ VALUES
 
 ************************************************************/
 
-IF @Testing = 0 
+INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
+VALUES
+(4.0,'Default File Locations',NULL,'These are the settings you have selected to use for this install')
 
-BEGIN
-
-    INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-    VALUES
-    (4,'Default File Locations',NULL,'These are the settings you have selected to use for this install')
 
     USE [master];
 
@@ -244,73 +247,57 @@ BEGIN
 
     BEGIN
 
-        EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'DefaultData', REG_SZ, @DefaultData;
+		IF @Testing = 0
 
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-        VALUES
-        (4.1,'Default Data Directory',@DefaultData,NULL)
+		BEGIN
 
-    END
+			EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'DefaultData', REG_SZ, @DefaultData;
 
-    ELSE 
-
-    BEGIN
-
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-        VALUES
-        (4.1,'Default Data Directory','No Changes Made',NULL)
+		END	       
 
     END 
+
+	INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
+    VALUES
+    (4.1,'Default Data Directory',@DefaultData,NULL)
 
     IF @DefaultLog IS NOT NULL OR LEN(@DefaultLog) > 1 
 
     BEGIN
 
-        EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'DefaultLog', REG_SZ, @DefaultLog;
+		IF @Testing = 0
 
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-        VALUES
-        (4.2,'Default Log Directory',@DefaultLog,NULL)
+		BEGIN
 
+			EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'DefaultLog', REG_SZ, @DefaultLog;
+
+		END
+		        
     END
 
-    ELSE 
-
-    BEGIN
-
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-        VALUES
-        (4.2,'Default Log Directory','No Changes Made',NULL)
-
-    END 
+    INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
+    VALUES
+    (4.2,'Default Log Directory',@DefaultLog,NULL)
 
     IF @DefaultBackup IS NOT NULL OR LEN(@DefaultBackup) > 1 
 
     BEGIN
 
-        EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'BackupDirectory', REG_SZ, @DefaultBackup;
+		IF @Testing = 0
 
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-        VALUES
-        (4.3,'Default Backup Directory',@DefaultBackup,NULL)
+		BEGIN
+
+			EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'BackupDirectory', REG_SZ, @DefaultBackup;
+			
+		END       
 
     END
 
-    ELSE 
+    INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
+    VALUES
+    (4.3,'Default Backup Directory',@DefaultBackup,NULL),
+	(4.4,'WARNING','Changes to default file location will require the SQL Service to be restarted for them to take effect. make sure that the dbengine service account and sql service account have permission to that new directory too.',NULL)
 
-    BEGIN
-
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-        VALUES
-        (4.3,'Default Backup Directory','No Changes Made',NULL)
-
-    END 
-
-END
-
-INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-VALUES
-(4.4,'WARNING','Changes to default file location will require the SQL Service to be restarted for them to take effect. make sure that the dbengine service account and sql service account have permission to that new directory too.',NULL)
 
 /************************************************************
 
@@ -318,25 +305,25 @@ VALUES
 
 ************************************************************/
 
-IF @Testing = 0 
+IF @AgentLog <> ' ' OR LEN(@AgentLog) > 0
 
 BEGIN
 
-    IF @AgentLog <> ' ' OR LEN(@AgentLog) > 0
+	IF @Testing = 0
 
-    BEGIN
+	BEGIN
 
-        USE [Msdb];
+		USE [Msdb];
 
-        EXEC msdb.dbo.sp_set_sqlagent_properties @errorlog_file = @AgentLog;    
+		EXEC msdb.dbo.sp_set_sqlagent_properties @errorlog_file = @AgentLog;  
+		
+	END  
 
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-        VALUES
-        (5,'Default Agent Log Location',NULL,'These are the settings you have selected to use for this install'),
-        (5.1,'Agent Log Directory',@AgentLog,NULL),
-        (5.2,'WARNING','Changes to the Agent Log location will not take effect until the agent service is re-started, make sure that the agent service account has permission to that new directory too.',NULL)
-
-    END
+    INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
+    VALUES
+    (5.0,'Default Agent Log Location',NULL,'These are the settings you have selected to use for this install'),
+    (5.1,'Agent Log Directory',@AgentLog,NULL),
+    (5.2,'WARNING','Changes to the Agent Log location will not take effect until the agent service is re-started, make sure that the agent service account has permission to that new directory too.',NULL)
 
 END
 
@@ -347,37 +334,26 @@ END
 
 ************************************************************/
 
-IF @Testing = 0 
+IF @EnableDac <> ' ' OR LEN(@EnableDac) > 0
 
 BEGIN
 
-    IF @EnableDac <> ' ' OR LEN(@EnableDac) > 0
+	IF @Testing = 0
 
-    BEGIN
+	BEGIN
 
-        EXEC sp_configure 'remote admin connections', @EnableDac;
+		EXEC sp_configure 'remote admin connections', @EnableDac;
 
-        RECONFIGURE;
+		RECONFIGURE;		
 
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-        VALUES
-        (5,'DAC Settings',NULL,'These are the settings you have selected to use for this install'),
-        (5.1,'Is the DAC enabled for this instance',CASE WHEN @EnableDac = 1 THEN 'Yes' ELSE 'No' END,NULL)
-
-    END
-
-    ELSE
-
-    BEGIN
-
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-        VALUES
-        (5,'DAC Settings',NULL,'These are the settings you have selected to use for this install'),
-        (5.1,'No Changes Made To The DAC',NULL,NULL)
-
-    END
+	END
 
 END
+
+INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
+VALUES
+(6.0,'DAC Settings',NULL,'These are the settings you have selected to use for this install'),
+(6.1,'Is the DAC enabled for this instance',CASE WHEN @EnableDac = 1 THEN 'Yes' ELSE 'No' END,NULL)
 
 /************************************************************
 
@@ -390,7 +366,7 @@ DECLARE @MaxTempDB INT, @TempDBCnt INT, @TempDBSQL varchar(4000),@TempDBName var
 
 INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
 VALUES
-(6,'TempDB File Locations',NULL,'These are the settings you have selected to use for this install')
+(7.0,'TempDB File Locations',NULL,'These are the settings you have selected to use for this install')
 
 USE [master];
 
@@ -474,7 +450,7 @@ END;
 
 INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
 VALUES
-(6. + @TempDBCnt,'TempDB File Locations',NULL,@TempDBName + '.ldf' + ' has been moved to ' + @TempDBLocation )
+(7.1 + @TempDBCnt,'TempDB File Locations',NULL,@TempDBName + '.ldf' + ' has been moved to ' + @TempDBLocation )
 
 SET @TempDBCnt = @TempDBCnt + 1
 
@@ -511,21 +487,9 @@ BEGIN
 
     INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
     VALUES
-    (7,'SA Account Settings',NULL,'These are the settings you have selected to use for this install','https://www.mssqltips.com/sqlservertip/3695/best-practices-to-secure-the-sql-server-sa-account/'),
-    (7.1,'New SA Password',@SAPwd,NULL,NULL),
-    (7.2,'WARNING','Ensure the password is recorded, loosing the SA password will render the DAC useless',NULL,NULL)
-
-END
-
-ELSE 
-
-BEGIN
-
-INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
-VALUES
-(7,'SA Account Settings',NULL,'These are the settings you have selected to use for this install','https://www.mssqltips.com/sqlservertip/3695/best-practices-to-secure-the-sql-server-sa-account/'),
-(7.1,'New SA Password',@SAPwd,NULL,NULL),
-(7.2,'WARNING','Ensure the password is recorded, loosing the SA password will render the DAC useless',NULL,NULL)
+    (8.0,'SA Account Settings',NULL,'These are the settings you have selected to use for this install','https://www.mssqltips.com/sqlservertip/3695/best-practices-to-secure-the-sql-server-sa-account/'),
+    (8.1,'New SA Password',@SAPwd,NULL,NULL),
+    (8.2,'WARNING','Ensure the password is recorded, loosing the SA password will render the DAC useless',NULL,NULL)
 
 END
 
@@ -537,9 +501,10 @@ BEGIN
 	DISABLE;
 
 END
+
 INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
 VALUES
-(7.3,'SA Disabled','The SA account has been disabled',NULL,'https://www.brentozar.com/archive/2016/01/how-to-talk-people-out-of-the-sa-account/')    
+(8.3,'SA Disabled','The SA account has been disabled',NULL,'https://www.brentozar.com/archive/2016/01/how-to-talk-people-out-of-the-sa-account/')    
 
 IF @Testing = 0
 
@@ -551,7 +516,7 @@ END
 
 INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
 VALUES
-(7.4,'SA Renamed','New Name essey',NULL,NULL)    
+(8.4,'SA Renamed','New Name essey',NULL,NULL)    
 
 /************************************************************
 
@@ -559,40 +524,28 @@ VALUES
 
 ************************************************************/
 
-IF @Testing = 0 
-
-BEGIN
-
 IF NOT EXISTS (SELECT name FROM msdb.dbo.sysoperators where (name = @operator_name or email_address = @operator_email))
 
 BEGIN
 
-    USE [msdb];
+	IF @Testing = 0 
 
-    EXEC msdb.dbo.sp_add_operator @name= @operator_name, 
-            @enabled=1, 
-            @pager_days=0, 
-            @email_address= @operator_email
+	BEGIN
 
-    INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-    VALUES
-    (8,'Operator Configuration',NULL,'These are the settings you have selected to use for this install'),
-    (8.1,'Operator Name',@operator_name,NULL),
-    (8.2,'Operator Email',@operator_email,NULL)
+		USE [msdb];
 
-END
+		EXEC msdb.dbo.sp_add_operator @name= @operator_name, 
+				@enabled=1, 
+				@pager_days=0, 
+				@email_address= @operator_email
 
-ELSE
-
-BEGIN
+	END
 
     INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
     VALUES
-    (8,'Operator Configuration',NULL,'These are the settings you have selected to use for this install'),
-    (8.1,'Operator Name Not Changes',NULL,NULL),
-    (8.2,'Operator Email',NULL,NULL)
-
-END
+    (9.0,'Operator Configuration',NULL,'These are the settings you have selected to use for this install'),
+    (9.1,'Operator Name',@operator_name,NULL),
+    (9.2,'Operator Email',@operator_email,NULL)
 
 END
 
@@ -602,34 +555,36 @@ END
 
 ************************************************************/
 
-IF @Testing = 0 
+
+
+DECLARE @Broker INT = (SELECT is_broker_enabled FROM sys.databases WHERE name = 'msdb')
+
+DECLARE @MailXP sql_variant	 = (SELECT value_in_use FROM  sys.configurations WHERE name = 'Database Mail XPs')
+
+IF @MailXP = 0  AND @MailXP = 0
 
 BEGIN
 
-    DECLARE @Broker INT = (SELECT is_broker_enabled FROM sys.databases WHERE name = 'msdb')
+	IF @Testing = 0
 
-    DECLARE @MailXP sql_variant	 = (SELECT value_in_use FROM  sys.configurations WHERE name = 'Database Mail XPs')
-
-    IF @MailXP = 0  AND @MailXP = 0
-
-    BEGIN
+	BEGIN
     
-        EXEC sp_configure 'show advanced options', '1';
-        RECONFIGURE
+		EXEC sp_configure 'show advanced options', '1';
+		RECONFIGURE
 
-        EXEC sp_configure 'Database Mail XPs', 1;
-        RECONFIGURE
+		EXEC sp_configure 'Database Mail XPs', 1;
+		RECONFIGURE
 
-    END
+	END
 
 END
 
 INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
 VALUES
-(8,'Operator Configuration',NULL,'These are the settings you have selected to use for this install'),
-(8.1,'Operator Name',@operator_name,NULL),
-(8.2,'Operator Email',@operator_email,NULL),
-(8.3,'WARNING','Don''t forget to add a profile and SMTP account, we can''t do that here',NULL) 
+(10.0,'Operator Configuration',NULL,'These are the settings you have selected to use for this install'),
+(10.1,'Operator Name',@operator_name,NULL),
+(10.2,'Operator Email',@operator_email,NULL),
+(10.3,'WARNING','Don''t forget to add a profile and SMTP account, we can''t do that here',NULL) 
 
 /************************************************************
 
@@ -647,26 +602,14 @@ BEGIN
     USE [msdb];
     EXEC msdb.dbo.sp_set_sqlagent_properties @email_save_in_sent_folder=1;
 
-    INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-    VALUES
-    (9,'Failsafe Operator Configuration',NULL,'These are the settings you have selected to use for this install'),
-    (9.1,'Operator Name',@operator_name,NULL),
-    (9.2,'Operator Email',@operator_email,NULL),
-    (9.3,'WARNING','Don''t forget to add a profile and SMTP account, we can''t do that here',NULL) 
-
 END
 
-ELSE
-
-BEGIN
-
-    INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-    VALUES
-    (9,'Failsafe Operator Configuration',NULL,'These are the settings you have selected to use for this install'),
-    (9.1,'Operator Name Not Changed',@operator_name,NULL),
-    (9.2,'Operator Email Not Changed',@operator_email,NULL)
-
-END
+INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
+VALUES
+(11.0,'Failsafe Operator Configuration',NULL,'These are the settings you have selected to use for this install'),
+(11.1,'Operator Name',@operator_name,NULL),
+(11.2,'Operator Email',@operator_email,NULL),
+(11.3,'WARNING','Don''t forget to add a profile and SMTP account, we can''t do that here',NULL) 
 
 /************************************************************
 
@@ -743,15 +686,15 @@ END
 
 INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
 VALUES
-(10,'System Wide Alerts',NULL,'These are the settings you have selected to use for this install')
-
-IF @Testing = 0 
-
-BEGIN
+(12.0,'System Wide Alerts',NULL,'These are the settings you have selected to use for this install')
 
     IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name  = 'Severity 016')
 
     BEGIN
+
+		IF @Testing = 0
+
+		BEGIN
 
         USE [msdb];
         EXEC msdb.dbo.sp_add_alert @name=N'Severity 016',
@@ -764,9 +707,11 @@ BEGIN
 
         EXEC msdb.dbo.sp_add_notification @alert_name=N'Severity 016', @operator_name=N'The DBA Team', @notification_method = 7;
 
+		END
+
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
         VALUES
-        (10.1,'Severity 016',NULL,'Severity 16 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017')
+        (12.1,'Severity 016',NULL,'Severity 16 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017')
 
         SET @AlertCnt = 1
 
@@ -778,7 +723,7 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 017',NULL,'Severity 16 Already Exists')
+        (12.2,'Severity 017',NULL,'Severity 16 Already Exists')
 
 	END
 
@@ -786,19 +731,25 @@ BEGIN
 
     BEGIN
 
-        EXEC msdb.dbo.sp_add_alert @name=N'Severity 017',
-        @message_id=0,
-        @severity=17,
-        @enabled=1,
-        @delay_between_responses=60,
-        @include_event_description_in=1,
-        @job_id=N'00000000-0000-0000-0000-000000000000';
+		IF @Testing = 0
 
-        EXEC msdb.dbo.sp_add_notification @alert_name=N'Severity 017', @operator_name=N'The DBA Team', @notification_method = 7;
+		BEGIN
+
+			EXEC msdb.dbo.sp_add_alert @name=N'Severity 017',
+			@message_id=0,
+			@severity=17,
+			@enabled=1,
+			@delay_between_responses=60,
+			@include_event_description_in=1,
+			@job_id=N'00000000-0000-0000-0000-000000000000';
+
+			EXEC msdb.dbo.sp_add_notification @alert_name=N'Severity 017', @operator_name=N'The DBA Team', @notification_method = 7;
+
+		END
 
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
         VALUES
-        (10.2,'Severity 017',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017')
+        (12.2,'Severity 017',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017')
 
         SET @AlertCnt = @AlertCnt + 1
 
@@ -810,13 +761,17 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 017',NULL,'Severity 17 Already Exists')
+        (12.2,'Severity 017',NULL,'Severity 17 Already Exists')
 
 	END
 
     IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name  = 'Severity 018')
 
         BEGIN
+
+		IF @Testing = 0
+
+		BEGIN
 
         EXEC msdb.dbo.sp_add_alert @name=N'Severity 018',
         @message_id=0,
@@ -828,9 +783,11 @@ BEGIN
 
         EXEC msdb.dbo.sp_add_notification @alert_name=N'Severity 018', @operator_name=N'The DBA Team', @notification_method = 7;
 
+		END
+
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.3,'Severity 018',NULL,'These are the settings you have selected to use for this install')
+        (12.3,'Severity 018',NULL,'These are the settings you have selected to use for this install')
 
         SET @AlertCnt = @AlertCnt + 1
 
@@ -842,13 +799,17 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 018',NULL,'Severity 18 Already Exists')
+        (12.3,'Severity 018',NULL,'Severity 18 Already Exists')
 
 	END
 
     IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name  = 'Severity 019')
 
     BEGIN
+		
+		IF @Testing = 0
+
+		BEGIN
 
         EXEC msdb.dbo.sp_add_alert @name=N'Severity 019',
         @message_id=0,
@@ -860,9 +821,11 @@ BEGIN
 
         EXEC msdb.dbo.sp_add_notification @alert_name=N'Severity 019', @operator_name=N'The DBA Team', @notification_method = 7;
 
+		END
+
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.4,'Severity 019',NULL,'These are the settings you have selected to use for this install')
+        (12.4,'Severity 019',NULL,'These are the settings you have selected to use for this install')
 
         SET @AlertCnt = @AlertCnt + 1
 
@@ -874,13 +837,17 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 019',NULL,'Severity 19 Already Exists')
+        (12.4,'Severity 019',NULL,'Severity 19 Already Exists')
 
 	END
 
     IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name  = 'Severity 020')
 
     BEGIN
+
+		IF @Testing = 0
+
+		BEGIN
 
         EXEC msdb.dbo.sp_add_alert @name=N'Severity 020',
         @message_id=0,
@@ -892,9 +859,11 @@ BEGIN
 
         EXEC msdb.dbo.sp_add_notification @alert_name=N'Severity 020', @operator_name=N'The DBA Team', @notification_method = 7;
 
+		END
+
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.5,'Severity 020',NULL,'These are the settings you have selected to use for this install')
+        (12.5,'Severity 020',NULL,'These are the settings you have selected to use for this install')
 
         SET @AlertCnt = @AlertCnt + 1
 
@@ -906,13 +875,17 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 020',NULL,'Severity 20 Already Exists')
+        (12.5,'Severity 020',NULL,'Severity 20 Already Exists')
 
 	END
 
     IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name  = 'Severity 021')
 
     BEGIN
+
+		IF @Testing = 0
+
+		BEGIN
 
         EXEC msdb.dbo.sp_add_alert @name=N'Severity 021',
         @message_id=0,
@@ -924,9 +897,11 @@ BEGIN
 
         EXEC msdb.dbo.sp_add_notification @alert_name=N'Severity 021', @operator_name=N'The DBA Team', @notification_method = 7;
 
+		END
+
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.6,'Severity 021',NULL,'These are the settings you have selected to use for this install')
+        (12.6,'Severity 021',NULL,'These are the settings you have selected to use for this install')
 
         SET @AlertCnt = @AlertCnt + 1
 
@@ -938,13 +913,17 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 021',NULL,'Severity 21 Already Exists')
+        (12.6,'Severity 021',NULL,'Severity 21 Already Exists')
 
 	END
 
     IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name  = 'Severity 022')
 
     BEGIN
+
+		IF @Testing = 0 
+
+		BEGIN
 
         EXEC msdb.dbo.sp_add_alert @name=N'Severity 022',
         @message_id=0,
@@ -956,9 +935,11 @@ BEGIN
 
         EXEC msdb.dbo.sp_add_notification @alert_name=N'Severity 022', @operator_name=N'The DBA Team', @notification_method = 7;
 
+		END
+
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.7,'Severity 022',NULL,'These are the settings you have selected to use for this install')
+        (12.7,'Severity 022',NULL,'These are the settings you have selected to use for this install')
 
         SET @AlertCnt = @AlertCnt + 1
 
@@ -970,13 +951,17 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 022',NULL,'Severity 22 Already Exists')
+        (12.7,'Severity 022',NULL,'Severity 22 Already Exists')
 
 	END
 
     IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name  = 'Severity 023')
 
     BEGIN
+
+		IF @Testing = 0
+
+		BEGIN
 
         EXEC msdb.dbo.sp_add_alert @name=N'Severity 023',
         @message_id=0,
@@ -988,9 +973,11 @@ BEGIN
 
         EXEC msdb.dbo.sp_add_notification @alert_name=N'Severity 023', @operator_name=N'The DBA Team', @notification_method = 7;
 
+		END
+
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.8,'Severity 023',NULL,'These are the settings you have selected to use for this install')
+        (12.8,'Severity 023',NULL,'These are the settings you have selected to use for this install')
 
         SET @AlertCnt = @AlertCnt + 1
 
@@ -1002,13 +989,17 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 023',NULL,'Severity 23 Already Exists')
+        (12.8,'Severity 023',NULL,'Severity 23 Already Exists')
 
 	END
 
     IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name  = 'Severity 024')
 
     BEGIN
+
+		IF @Testing = 0
+
+		BEGIN
 
         EXEC msdb.dbo.sp_add_alert @name=N'Severity 024',
         @message_id=0,
@@ -1020,9 +1011,11 @@ BEGIN
 
         EXEC msdb.dbo.sp_add_notification @alert_name=N'Severity 024', @operator_name=N'The DBA Team', @notification_method = 7;
 
+		END
+
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.9,'Severity 024',NULL,'These are the settings you have selected to use for this install')
+        (12.9,'Severity 024',NULL,'These are the settings you have selected to use for this install')
 
         SET @AlertCnt = @AlertCnt + 1
 
@@ -1034,13 +1027,17 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 024',NULL,'Severity 24 Already Exists')
+        (12.9,'Severity 024',NULL,'Severity 24 Already Exists')
 
 	END
 
     IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name  = 'Severity 025')
 
     BEGIN
+		
+		IF @Testing = 0
+
+		BEGIN
 
         EXEC msdb.dbo.sp_add_alert @name=N'Severity 025',
         @message_id=0,
@@ -1052,9 +1049,11 @@ BEGIN
 
         EXEC msdb.dbo.sp_add_notification @alert_name=N'Severity 025', @operator_name=N'The DBA Team', @notification_method = 7;
 
+		END
+
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.10,'Severity 025',NULL,'These are the settings you have selected to use for this install')
+        (12.10,'Severity 025',NULL,'These are the settings you have selected to use for this install')
 
         SET @AlertCnt = @AlertCnt + 1
 
@@ -1066,13 +1065,17 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 025',NULL,'Severity 25 Already Exists')
+        (12.10,'Severity 025',NULL,'Severity 25 Already Exists')
 
 	END
 
     IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name  = 'Error Number 823')
 
     BEGIN
+
+		IF @Testing = 0
+
+		BEGIN
 
         EXEC msdb.dbo.sp_add_alert @name=N'Error Number 823',
         @message_id=823,
@@ -1084,9 +1087,11 @@ BEGIN
 
         EXEC msdb.dbo.sp_add_notification @alert_name=N'Error Number 823', @operator_name=N'The DBA Team', @notification_method = 7;
 
+		END
+
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.11,'Error Number 823',NULL,'These are the settings you have selected to use for this install')
+        (12.11,'Error Number 823',NULL,'These are the settings you have selected to use for this install')
 
         SET @AlertCnt = @AlertCnt + 1
 
@@ -1098,13 +1103,17 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 823',NULL,'Severity 823 Already Exists')
+        (12.11,'Severity 823',NULL,'Severity 823 Already Exists')
 
 	END
 
     IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name  = 'Error Number 824')
 
     BEGIN
+
+		IF @Testing = 0
+
+		BEGIN
 
         EXEC msdb.dbo.sp_add_alert @name=N'Error Number 824',
         @message_id=824,
@@ -1116,9 +1125,11 @@ BEGIN
 
         EXEC msdb.dbo.sp_add_notification @alert_name=N'Error Number 824', @operator_name=N'The DBA Team', @notification_method = 7;
 
+		END
+
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.12,'Error Number 824',NULL,'These are the settings you have selected to use for this install')
+        (12.12,'Error Number 824',NULL,'These are the settings you have selected to use for this install')
 
         SET @AlertCnt = @AlertCnt + 1
 
@@ -1130,13 +1141,17 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 824',NULL,'Severity 824 Already Exists')
+        (12.12,'Severity 824',NULL,'Severity 824 Already Exists')
 
 	END
 
     IF NOT EXISTS (SELECT name FROM msdb.dbo.sysalerts WHERE name  = 'Error Number 825')
 
     BEGIN
+
+		IF @Testing = 0
+
+		BEGIN
 
         EXEC msdb.dbo.sp_add_alert @name=N'Error Number 825',
         @message_id=825,
@@ -1148,9 +1163,11 @@ BEGIN
 
         EXEC msdb.dbo.sp_add_notification @alert_name=N'Error Number 825', @operator_name=N'The DBA Team', @notification_method = 7;
 
+		END
+
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.13,'Error Number 825',NULL,'These are the settings you have selected to use for this install')
+        (12.13,'Error Number 825',NULL,'These are the settings you have selected to use for this install')
 
         SET @AlertCnt = @AlertCnt + 1
 
@@ -1162,38 +1179,13 @@ BEGIN
 
 		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (10.2,'Severity 825',NULL,'Severity 17 Already Exists')
+        (12.13,'Severity 825',NULL,'Severity 17 Already Exists')
 
 	END
 
 	INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
 	VALUES
-	(10.14,'Total Errors Added',CAST((CASE WHEN @AlertCnt = 0 THEN NULL ELSE @AlertCnt END) as varchar),'This is the total number of alerts that was added to this instance')
-
-END
-
-ELSE IF @Testing = 1
-
-BEGIN
-
-	INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
-	VALUES
-	(10.1,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.2,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.3,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.4,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.5,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.6,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.7,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.8,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.9,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.10,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.11,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.12,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.13,'Error Number 825 Installed',NULL,'Severity 17 Installed', 'https://docs.microsoft.com/en-us/sql/relational-databases/errors-events/database-engine-error-severities?view=sql-server-2017'),
-	(10.14,'Total Errors Added',CAST((CASE WHEN @AlertCnt = 0 THEN NULL ELSE @AlertCnt END) as varchar),'These are the settings you have selected to use for this install',NULL)
-
-END
+	(12.14,'Total Errors Added',CAST((CASE WHEN @AlertCnt = 0 THEN NULL ELSE @AlertCnt END) as varchar),'This is the total number of alerts that was added to this instance')
 
 /************************************************************
 
@@ -1209,24 +1201,12 @@ EXEC sp_configure 'backup compression default', @CompressBackups;
 
 RECONFIGURE WITH OVERRIDE;
 
-INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-VALUES
-(11,'Backup Compression Settings',NULL,'These are the settings you have selected to use for this install'),
-(11.1,'Are backups being compressed by default',CASE WHEN @CompressBackups = 1 THEN 'Yes' ELSE 'No' END,'These are the backup compression settings you have selected for this install')
-
 END
-
-ELSE 
-
-BEGIN
 
 INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
 VALUES
-(11,'Backup Compression Settings',NULL,'These are the settings you have selected to use for this install'),
-(11.1,'Are backups being compressed by default',CASE WHEN @CompressBackups = 1 THEN 'Yes' ELSE 'No' END,'These are the backup compression settings you have selected for this install')
-
-
-END
+(13.0,'Backup Compression Settings',NULL,'These are the settings you have selected to use for this install'),
+(13.1,'Are backups being compressed by default',CASE WHEN @CompressBackups = 1 THEN 'Yes' ELSE 'No' END,'These are the backup compression settings you have selected for this install')
  
 /************************************************************
 
@@ -1234,37 +1214,26 @@ END
 
 ************************************************************/
 
-IF @Testing = 0 
-
-BEGIN
-
 IF NOT EXISTS (SELECT name from sys.databases where name = QUOTENAME(@DatabaseName)) 
 
 	BEGIN
 
-        SET @CreateDB = 'CREATE DATABASE ' + QUOTENAME(@DatabaseName) + ''
+		IF @Testing = 0
 
-        EXEC sp_executesql @CreateDB
+		BEGIN
+
+			SET @CreateDB = 'CREATE DATABASE ' + QUOTENAME(@DatabaseName) + ''
+
+			EXEC sp_executesql @CreateDB
+
+		END
 
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
         VALUES
-        (12,'Default DBA Database',NULL,'These are the settings you have selected to use for this install'),
-        (12.1,'Database Created',QUOTENAME(@DatabaseName),'These are the settings you have selected to use for this install')
+        (14.0,'Default DBA Database',NULL,'These are the settings you have selected to use for this install'),
+        (14.1,'Database Created',QUOTENAME(@DatabaseName),'These are the settings you have selected to use for this install')
 
 	END	
-
-END
-
-ELSE
-
-BEGIN
-
-	INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-	VALUES
-	(12,'Default DBA Database',NULL,'These are the settings you have selected to use for this install'),
-	(12.1,'Database Created',@DatabaseName,'These are the settings you have selected to use for this install')
-
-END
 
 /************************************************************
 
@@ -1282,21 +1251,10 @@ END
 
 --    INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
 --    VALUES
---    (13,'Default DBA Database',NULL,'These are the settings you have selected to use for this install'),
---    (13.1,'Database Created',@DatabaseName,'These are the settings you have selected to use for this install')
+--    (15.0,'Default DBA Database',NULL,'These are the settings you have selected to use for this install'),
+--    (15.1,'Database Created',@DatabaseName,'These are the settings you have selected to use for this install')
 
 --    END
-
---END
-
---ELSE
-
---BEGIN 
-
---	INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
---	VALUES
---	(13,'Default DBA Database',NULL,'These are the settings you have selected to use for this install'),
---	(13.1,'Database Created',@DatabaseName,'These are the settings you have selected to use for this install')
 
 --END
 
@@ -1382,10 +1340,10 @@ the the script on an actual Availability Group.
         IF (@@TRANCOUNT > 0) ROLLBACK TRANSACTION
     EndSave:    
 
-    INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
-    VALUES
-    (14,'Availability Member Check Agent Job',NULL,'These are the settings you have selected to use for this install',NULL),
-    (14.1,'Availability Member Check Created','Agent Job has been created','This agent job is used to run the availability group member check','https://www.codenameowl.com/managing-agent-jobs-in-availability-groups/')
+		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
+		VALUES
+		(16.0,'Availability Member Check Agent Job',NULL,'These are the settings you have selected to use for this install',NULL),
+		(16.1,'Availability Member Check Created','Agent Job has been created','This agent job is used to run the availability group member check','https://www.codenameowl.com/managing-agent-jobs-in-availability-groups/')
     
     END
 
@@ -1393,25 +1351,14 @@ the the script on an actual Availability Group.
 
     BEGIN
 
-    INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
-    VALUES
-    (14,'Availability Member Check',NULL,'These are the settings you have selected to use for this install'),
-    (14.1,'Availability Member Agent Job','Agent Job Already Exists, SKIPPING',NULL)
-
-    END
-
-    END
-
-	ELSE
-
-	BEGIN
-
-		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
+		INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
 		VALUES
-		(14,'Default DBA Database',NULL,'These are the settings you have selected to use for this install',NULL),
-		(14.1,'Database Created','Agent Job has been created','This agent job is used to run the availability group member check','https://www.codenameowl.com/managing-agent-jobs-in-availability-groups/')
+		(16.0,'Availability Member Check',NULL,'These are the settings you have selected to use for this install'),
+		(16.1,'Availability Member Agent Job','Agent Job Already Exists, SKIPPING',NULL)
 
-	END
+    END
+
+    END
 
 /************************************************************
 
@@ -1432,8 +1379,8 @@ BEGIN
 
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
         VALUES
-        (15,'Ola Scripts',NULL,'These are the settings you have selected to use for this install',NULL),
-        (15.1,'Ola Scripts Missing',NULL,'Ola Scripts dont exist, they are good you know, go get them and set them up','https://ola.hallengren.com/')
+        (17.0,'Ola Scripts',NULL,'These are the settings you have selected to use for this install',NULL),
+        (17.1,'Ola Scripts Missing',NULL,'Ola Scripts dont exist, they are good you know, go get them and set them up','https://ola.hallengren.com/')
 
     END
 
@@ -1443,8 +1390,8 @@ BEGIN
 
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
         VALUES
-        (15,'Ola Scripts',NULL,'These are the settings you have selected to use for this install',NULL),
-        (15.1,'Ola Scripts Exist',NULL,'Ola Scripts, exist, they may need confiuring check the reference URL for documentation','https://ola.hallengren.com/')
+        (17.0,'Ola Scripts',NULL,'These are the settings you have selected to use for this install',NULL),
+        (17.1,'Ola Scripts Exist',NULL,'Ola Scripts, exist, they may need confiuring check the reference URL for documentation','https://ola.hallengren.com/')
 
     END	
 
@@ -1457,8 +1404,8 @@ BEGIN
 
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
         VALUES
-        (16,'First Responder Kit',NULL,'These are the settings you have selected to use for this install',NULL),
-        (16.1,'Database Created',NULL,'Looks like none of the First Responder Kit exist here, these are some great tools, go grab them, they may just save the day.','https://www.brentozar.com/first-aid/')
+        (18.0,'First Responder Kit',NULL,'These are the settings you have selected to use for this install',NULL),
+        (18.1,'Database Created',NULL,'Looks like none of the First Responder Kit exist here, these are some great tools, go grab them, they may just save the day.','https://www.brentozar.com/first-aid/')
 
     END
 
@@ -1468,8 +1415,8 @@ BEGIN
 
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
         VALUES
-        (16,'First Responder Kit',NULL,'These are the settings you have selected to use for this install',NULL),
-        (16.1,'First Responder Kit Exists',NULL,'Looks like the First Responder Kit exists here, if you are unsure how to use them, check out the documentation.','https://www.brentozar.com/first-aid/')
+        (18,'First Responder Kit',NULL,'These are the settings you have selected to use for this install',NULL),
+        (18.1,'First Responder Kit Exists',NULL,'Looks like the First Responder Kit exists here, if you are unsure how to use them, check out the documentation.','https://www.brentozar.com/first-aid/')
 
     END
 
