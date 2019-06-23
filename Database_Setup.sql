@@ -1369,9 +1369,12 @@ the the script on an actual Availability Group.
 IF EXISTS (SELECT name from msdb.sys.databases where name = @DatabaseName) 
 
 BEGIN
-	
-	--This needs fixing
-	SET @OlaExists = (SELECT COUNT(name) from DBA_Tasks.sys.objects where (name = 'DatabaseBackup' or name = 'DatabaseIntegrityCheck' or name = 'CommandExecute' or name = 'IndexOptimize'))
+
+    DECLARE @OlaSQL nvarchar(MAX)
+
+	SET @OlaSQL = 'SELECT @OlaCnt=COUNT(name) from' + QUOTENAME(@Database) + '.sys.objects where (name = ''DatabaseBackup'' or name = ''DatabaseIntegrityCheck'' or name = ''CommandExecute'' or name = ''IndexOptimize'')'
+
+    EXECUTE sp_executesql @OlaSQL, N'@Olacnt INT OUTPUT', @Olacnt=@OlaExists OUTPUT
 
     IF @OlaExists = 0 
 
@@ -1395,8 +1398,11 @@ BEGIN
 
     END	
 
-	--This needs fixing
-    SET @OzarExists = (SELECT COUNT(name) from DBA_Tasks.sys.objects where (name = 'sp_Blitz' or name = 'sp_BlitzBackups' or name = 'sp_BlitzCache' or name = 'sp_BlitzFirst' or name = 'sp_BlitzIndex' or name = 'sp_BlitzInMemoryOLTP' or name = 'sp_BlitzLock' or name = 'sp_BlitzQueryStore' or name = 'sp_BlitzWho'))
+    DECLARE @OzarSQL NVARCHAR(MAX)
+	
+    SET @OzarSQL = '(SELECT @Ozarcnt=COUNT(name) from' + QUOTENAME(@Database) + '.sys.objects where (name = ''sp_Blitz'' or name = ''sp_BlitzBackups'' or name = ''sp_BlitzCache'' or name = ''sp_BlitzFirst'' or name = ''sp_BlitzIndex'' or name = ''sp_BlitzInMemoryOLTP'' or name = ''sp_BlitzLock'' or name = ''sp_BlitzQueryStore'' or name = ''sp_BlitzWho'')'
+
+    EXEC sql_executesql @OzarSQL, N'@Ozarcnt INT OUTPUT',@Ozarcnt=@OzarExists OUTPUT
 
     IF @OzarExists = 0 
 
@@ -1405,7 +1411,7 @@ BEGIN
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
         VALUES
         (18.0,'First Responder Kit',NULL,'These are the settings you have selected to use for this install',NULL),
-        (18.1,'Database Created',NULL,'Looks like none of the First Responder Kit exist here, these are some great tools, go grab them, they may just save the day.','https://www.brentozar.com/first-aid/')
+        (18.1,'First Responder Kit Missing',NULL,'Looks like none of the First Responder Kit exist here, these are some great tools, go grab it, they may just save the day.','https://www.brentozar.com/first-aid/')
 
     END
 
@@ -1415,8 +1421,8 @@ BEGIN
 
         INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
         VALUES
-        (18,'First Responder Kit',NULL,'These are the settings you have selected to use for this install',NULL),
-        (18.1,'First Responder Kit Exists',NULL,'Looks like the First Responder Kit exists here, if you are unsure how to use them, check out the documentation.','https://www.brentozar.com/first-aid/')
+        (18.0,'First Responder Kit',NULL,'These are the settings you have selected to use for this install',NULL),
+        (18.1,'First Responder Kit Exists',NULL,'Looks like the First Responder Kit exists here, if you are unsure how to use it, check out the documentation.','https://www.brentozar.com/first-aid/')
 
     END
 
