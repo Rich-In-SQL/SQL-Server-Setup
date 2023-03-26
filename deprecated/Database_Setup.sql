@@ -139,8 +139,8 @@ INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
 VALUES
 (0.1,'Script Details',NULL,NULL),
 (0.2,'Script Version',CAST(@ScriptVersion as varchar) ,NULL),
-(0.3,'Script Author','Bonza Owl',NULL),
-(0.4,'Last Updated','07/10/2018',NULL),
+(0.3,'Script Author','Rich Howell',NULL),
+(0.4,'Last Updated','30/01/2022',NULL),
 (0.5,'Run Date',CONVERT(varchar(20),GETDATE()),NULL),
 (0.7,'Run By',SYSTEM_USER,NULL),
 (1.0,'SQL Server Version',NULL,NULL),
@@ -461,7 +461,7 @@ DROP TABLE #TempDb
 /************************************************************
 
 1.2 - Disable & Update SA
-We are callinh sa essey becuase they both sound the same so when
+We are calling sa essey becuase they both sound the same so when
 talking about it with other members of the team everyone will 
 know what we are talking about
 
@@ -555,8 +555,6 @@ END
 
 ************************************************************/
 
-
-
 DECLARE @Broker INT = (SELECT is_broker_enabled FROM sys.databases WHERE name = 'msdb')
 
 DECLARE @MailXP sql_variant	 = (SELECT value_in_use FROM  sys.configurations WHERE name = 'Database Mail XPs')
@@ -581,10 +579,8 @@ END
 
 INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes)
 VALUES
-(10.0,'Operator Configuration',NULL,'These are the settings you have selected to use for this install'),
-(10.1,'Operator Name',@operator_name,NULL),
-(10.2,'Operator Email',@operator_email,NULL),
-(10.3,'WARNING','Don''t forget to add a profile and SMTP account, we can''t do that here',NULL) 
+(10.0,'Database Mail',NULL,NULL),
+(10.1,'Database Mail','Enabled',NULL)
 
 /************************************************************
 
@@ -1359,73 +1355,5 @@ the the script on an actual Availability Group.
     END
 
     END
-
-/************************************************************
-
-1. - Check for tools
-
-************************************************************/
-
-IF EXISTS (SELECT name from msdb.sys.databases where name = @DatabaseName) 
-
-BEGIN
-
-    DECLARE @OlaSQL nvarchar(MAX)
-
-	SET @OlaSQL = 'SELECT @OlaCnt=COUNT(name) from' + QUOTENAME(@Database) + '.sys.objects where (name = ''DatabaseBackup'' or name = ''DatabaseIntegrityCheck'' or name = ''CommandExecute'' or name = ''IndexOptimize'')'
-
-    EXECUTE sp_executesql @OlaSQL, N'@Olacnt INT OUTPUT', @Olacnt=@OlaExists OUTPUT
-
-    IF @OlaExists = 0 
-
-    BEGIN
-
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
-        VALUES
-        (17.0,'Ola Scripts',NULL,'These are the settings you have selected to use for this install',NULL),
-        (17.1,'Ola Scripts Missing',NULL,'Ola Scripts dont exist, they are good you know, go get them and set them up','https://ola.hallengren.com/')
-
-    END
-
-    ELSE
-
-    BEGIN
-
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
-        VALUES
-        (17.0,'Ola Scripts',NULL,'These are the settings you have selected to use for this install',NULL),
-        (17.1,'Ola Scripts Exist',NULL,'Ola Scripts, exist, they may need confiuring check the reference URL for documentation','https://ola.hallengren.com/')
-
-    END	
-
-    DECLARE @OzarSQL NVARCHAR(MAX)
-	
-    SET @OzarSQL = '(SELECT @Ozarcnt=COUNT(name) from' + QUOTENAME(@Database) + '.sys.objects where (name = ''sp_Blitz'' or name = ''sp_BlitzBackups'' or name = ''sp_BlitzCache'' or name = ''sp_BlitzFirst'' or name = ''sp_BlitzIndex'' or name = ''sp_BlitzInMemoryOLTP'' or name = ''sp_BlitzLock'' or name = ''sp_BlitzQueryStore'' or name = ''sp_BlitzWho'')'
-
-    EXEC sql_executesql @OzarSQL, N'@Ozarcnt INT OUTPUT',@Ozarcnt=@OzarExists OUTPUT
-
-    IF @OzarExists = 0 
-
-    BEGIN
-
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
-        VALUES
-        (18.0,'First Responder Kit',NULL,'These are the settings you have selected to use for this install',NULL),
-        (18.1,'First Responder Kit Missing',NULL,'Looks like none of the First Responder Kit exist here, these are some great tools, go grab it, they may just save the day.','https://www.brentozar.com/first-aid/')
-
-    END
-
-    ELSE 
-
-    BEGIN
-
-        INSERT INTO #Actions (Step_ID,Section_Name,[Value],Notes,Reference_URL)
-        VALUES
-        (18.0,'First Responder Kit',NULL,'These are the settings you have selected to use for this install',NULL),
-        (18.1,'First Responder Kit Exists',NULL,'Looks like the First Responder Kit exists here, if you are unsure how to use it, check out the documentation.','https://www.brentozar.com/first-aid/')
-
-    END
-
-END
 
 SELECT * FROM #Actions
