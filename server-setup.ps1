@@ -33,6 +33,13 @@ $logFileLimit = (Get-Date).AddDays(-15)
 $scriptPathRoot = $theRoot
 $scriptPath = $scriptPathRoot + '\scripts\' 
 
+$sqlCredential = $host.ui.PromptForCredential("Please enter your credentials", "Please enter a username and password that has admin access to the SQL server.", "", "NetBiosUserName")
+
+$sourceSQLConnection = Connect-DbaInstance -SqlInstance $sourceServer -SqlCredential $sqlCredential
+$destinationSQLConnection = Connect-DbaInstance -SqlInstance $destinationServer -SqlCredential $sqlCredential
+
+$doIHaveInternet = ((Test-NetConnection www.google.com -Port 80 -InformationLevel "Detailed").TcpTestSucceeded)
+
 $availabilityGroup = Get-DbaAvailabilityGroup -SqlInstance $destinationServer | Select-Object -ExpandProperty AvailabilityGroup
 
 Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Script starting" -ForegroundColor Gray
@@ -84,35 +91,42 @@ catch {
 
 $dacState = Invoke-DbaQuery -SqlInstance $destinationServer -Query "SELECT value_in_use FROM sys.configurations where name = 'remote admin connections'"
 
-Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to enable the dedicated admin connection" -ForegroundColor Yellow    
-Add-Content -Path $logFullPath -Value "$(Get-Date -f "yyyy-MM-dd-HH-mm") - Attempting to enable the dedicated admin connection"
-
 if($dacState.value_in_use -eq 0) {
 
-    Invoke-DbaQuery -SqlInstance $destinationServer -Query "sp_configure 'remote admin connections', 1; RECONFIGURE"    
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to enable the dedicated admin connection" -ForegroundColor Yellow    
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f "yyyy-MM-dd-HH-mm") - Attempting to enable the dedicated admin connection"
     
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Dedicated admin connection configured sucessfully." -ForegroundColor Green    
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f "yyyy-MM-dd-HH-mm") - Dedicated admin connection configured sucessfully."
-    
+    try {
+
+        Invoke-DbaQuery -SqlInstance $destinationSQLConnection -Query "sp_configure 'remote admin connections', 1; RECONFIGURE"   
+        
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Dedicated admin connection configured sucessfully." -ForegroundColor Green    
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f "yyyy-MM-dd-HH-mm") - Dedicated admin connection configured sucessfully."
+
+    }
+    catch {
+
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error enabling the dedicated admin connection" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error enabling the dedicated admin connection. The Error was: $error"
+
+    }
+
 }
 
-$Broker = Invoke-DbaQuery -SqlInstance $destinationServer -Query "SELECT is_broker_enabled FROM sys.databases WHERE name = 'msdb'"
-$MailXP = Invoke-DbaQuery -SqlInstance $destinationServer -Query "SELECT value_in_use FROM  sys.configurations WHERE name = 'Database Mail XPs'"
-
-Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to set the maximum memory" -ForegroundColor Yellow
-Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Maximum memory has been set on this server"
+$Broker = Invoke-DbaQuery -SqlInstance $destinationSQLConnection -Query "SELECT is_broker_enabled FROM sys.databases WHERE name = 'msdb'"
+$MailXP = Invoke-DbaQuery -SqlInstance $destinationSQLConnection -Query "SELECT value_in_use FROM  sys.configurations WHERE name = 'Database Mail XPs'"
 
 if($Broker.is_broker_enabled -eq $False -and $MailXP.value_in_use -eq 0) {    
     
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Maximum memory has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to configure database mail, operator and fallback operator" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to configure database mail, operator and fallback operator"
 
     try {
 
-        Invoke-DbaQuery -SqlInstance $destinationServer -Query "EXEC sp_configure 'show advanced options', '1'"
+        Invoke-DbaQuery -SqlInstance $destinationSQLConnection -Query "EXEC sp_configure 'show advanced options', '1'"
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Maximum memory has been set on this server" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Maximum memory has been set on this server"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Enabling advanced featured was sucessful" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Enabling advanced featured was sucessful"
     }
     catch {
 
@@ -120,74 +134,74 @@ if($Broker.is_broker_enabled -eq $False -and $MailXP.value_in_use -eq 0) {
         Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error deleting log files. The Error was: $error"
     }
 
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Maximum memory has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to enable database mail" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to enable database mail"
 
     try {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Maximum memory has been set on this server"
-	
-        Invoke-DbaQuery -SqlInstance $destinationServer -Query "EXEC sp_configure 'Database Mail XPs', 1"
+        Invoke-DbaQuery -SqlInstance $destinationSQLConnection -Query "EXEC sp_configure 'Database Mail XPs', 1"
+
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Database mail enabled sucessfully." -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Database mail enabled sucessfully."
     }
     catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error deleting log files" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error deleting log files. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error enabling database mail." -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error enabling database mail. The Error was: $error"
 
     }
 
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Maximum memory has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to set failsafe operator" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to set failsafe operator"
 
     try {
 
-        Invoke-DbaQuery -SqlInstance $destinationServer -Query "EXEC master.dbo.sp_MSsetalertinfo @failsafeoperator= @operator_name, @notificationmethod=1;" -SqlParameter @(operator_name = "The DBA Team")
+        Invoke-DbaQuery -SqlInstance $destinationSQLConnection -Query "EXEC master.dbo.sp_MSsetalertinfo @failsafeoperator= @operator_name, @notificationmethod=1;" -SqlParameter @(operator_name = "The DBA Team") -SqlCredential $sqlCredential
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Maximum memory has been set on this server"
-
-    }
-    catch {
-
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error deleting log files" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error deleting log files. The Error was: $error"
-
-    }
-
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Maximum memory has been set on this server"
-
-    try {
-
-        Invoke-DbaQuery -SqlInstance $destinationServer -Query "EXEC msdb.dbo.sp_set_sqlagent_properties @email_save_in_sent_folder=1;"
-
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Maximum memory has been set on this server"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Failsafe operator set sucessfully." -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Failsafe operator set sucessfully."
 
     }
     catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error deleting log files" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error deleting log files. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error setting failsafe operator." -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error setting failsafe operator. The Error was: $error"
+
+    }
+
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to set save mail in sent folder." -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to set save mail in sent folder."
+
+    try {
+
+        Invoke-DbaQuery -SqlInstance $destinationSQLConnection -Query "EXEC msdb.dbo.sp_set_sqlagent_properties @email_save_in_sent_folder=1;" -SqlCredential $sqlCredential
+
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully set sent mail to save in sent folder." -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully set sent mail to save in sent folder."
+
+    }
+    catch {
+
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error setting sent mail to save in sent folder." -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error setting sent mail to save in sent folder.. The Error was: $error"
 
     }    
 
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Maximum memory has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to apply settings" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to apply settings"
     
     try {
 
-        Invoke-DbaQuery -SqlInstance $destinationServer -Query "RECONFIGURE;"
+        Invoke-DbaQuery -SqlInstance $destinationSQLConnection -Query "RECONFIGURE;"
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Maximum memory has been set on this server"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Settings applied sucessfully." -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Settings applied sucessfully."
 
     }
     catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error deleting log files" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error deleting log files. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error applying settings" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error applying settings. The Error was: $error"
 
     }     
 }
@@ -197,7 +211,7 @@ Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Enablin
 
 try {   
     
-    Invoke-DbaQuery -SqlInstance $destinationServer -Query "EXEC sp_configure 'backup compression default', 1; RECONFIGURE WITH OVERRIDE;"
+    Invoke-DbaQuery -SqlInstance $destinationSQLConnection -Query "EXEC sp_configure 'backup compression default', 1; RECONFIGURE WITH OVERRIDE;"
 
     Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Backup compression sucessfully enabled" -ForegroundColor Green
     Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Backup compression sucessfully enabled"
@@ -213,7 +227,7 @@ Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempt
 
 try {    
     
-    Enable-DbaTraceFlag -SqlInstance $destinationServer -TraceFlag 3226
+    Enable-DbaTraceFlag -SqlInstance $destinationSQLConnection -TraceFlag 3226
 
     Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Trace flags set sucessfully" -ForegroundColor Green
     Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Trace flags set sucessfully"
@@ -230,7 +244,7 @@ Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempt
 
 try {
 
-    Set-DbaMaxMemory -SqlInstance $destinationServer
+    Set-DbaMaxMemory -SqlInstance $destinationSQLConnection
 
     Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully set the maximum memory for this instance" -ForegroundColor Green
     Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully set the maximum memory for this instance"
@@ -247,7 +261,7 @@ Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempt
 
 try {
 
-    Set-DbaMaxDop -SqlInstance $destinationServer
+    Set-DbaMaxDop -SqlInstance $destinationSQLConnection
 
     Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully set the maxDop for this instance" -ForegroundColor Green
     Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully set the maxDop for this instance"
@@ -260,335 +274,162 @@ catch {
 
 if($sourceServer -ne $null) {
 
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Source Server parameter was specified as $sourceServer, attempting to copy objects to $destinationServer" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Source Server parameter was specified as $sourceServer, attempting to copy objects to $destinationServer"
+
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy databases from $sourceServer to $destinationServer using backup & restore to $sharedLocation" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy databases from $sourceServer to $destinationServer using backup & restore to $sharedLocation"
 
     try {
 
-        Copy-DbaDatabase -source $sourceServer -Destination $destinationServer -BackupRestore -SharedPath $sharedLocation
+        Copy-DbaDatabase -source $sourceSQLConnection -Destination $destinationSQLConnection -BackupRestore -SharedPath $sharedLocation
         
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Databases sucessfully copied from $sourceServer to $destinationServer using backup & restore to $sharedLocation" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Databases sucessfully copied from $sourceServer to $destinationServer using backup & restore to $sharedLocation"
     }
     catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying databases from $sourceServer to $destinationServer using backup & restore to $sharedLocation" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying databases from $sourceServer to $destinationServer using backup & restore to $sharedLocation. The Error was: $error"
     }
 
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy agent jobs from $sourceServer to $destinationServer" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy agent jobs from $sourceServer to $destinationServer"
 
     try {
 
-        Copy-DbaAgentJob -source $sourceServer -Destination $destinationServer -BackupRestore -SharedPath $sharedLocation
+        Copy-DbaAgentJob -source $sourceSQLConnection -Destination $destinationSQLConnection
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied agent jobs from $sourceServer to $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied agent jobs from $sourceServer to $destinationServer"
     }
     catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying agent jobs from $sourceServer to $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying agent jobs from $sourceServer to $destinationServer. The Error was: $error"
     }
 
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy logins from $sourceServer to $destinationServer" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy logins from $sourceServer to $destinationServer"
 
     try {
 
-        Copy-DbaLogin -source $sourceServer -Destination $destinationServer
+        Copy-DbaLogin -source $sourceSQLConnection -Destination $destinationSQLConnection
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy logins from $sourceServer to $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy logins from $sourceServer to $destinationServer"
     }
     catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying logins from $sourceServer to $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying logins from $sourceServer to $destinationServer. The Error was: $error"
     }
 
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy database mail configuration from $sourceServer to $destinationServer" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to database mail configuration from $sourceServer to $destinationServer"
 
     try {
 
-        Copy-DbaDbMail -source $sourceServer -Destination $destinationServer
+        Copy-DbaDbMail -source $sourceSQLConnection -Destination $destinationSQLConnection
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied database mail configuration from $sourceServer to $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied database mail configuration from $sourceServer to $destinationServer"
     }
     catch {
         
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"  
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying database mail configuration from $sourceServer to $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying database mail configuration from $sourceServer to $destinationServer. The Error was: $error"  
     }
 
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy database mail operator from $sourceServer to $destinationServer" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy database mail operator from $sourceServer to $destinationServer"
 
     try {
 
-        Copy-DbaAgentOperator -source $sourceServer -Destination $destinationServer
+        Copy-DbaAgentOperator -source $sourceSQLConnection -Destination $destinationSQLConnection
         
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied database mail operator from $sourceServer to $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied database mail operator from $sourceServer to $destinationServer"
     }
     catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying database mail operator from $sourceServer to $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying database mail operator from $sourceServer to $destinationServer. The Error was: $error"
     }
 
 } else
 {
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - No source server was specified, attempting to create objects on $destinationServer" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - No source server was specified, attempting to create objects on $destinationServer"
+
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create The DBA Team operator on $destinationServer" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create The DBA Team operator on $destinationServer"
 
     try
     {
-        New-DbaAgentOperator -SqlInstance $destinationServer -Operator 'The DBA Team' -EmailAddress $operatorEmail
+        New-DbaAgentOperator -SqlInstance $destinationSQLConnection -Operator 'The DBA Team' -EmailAddress $operatorEmail
         
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created The DBA Team operator on $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created The DBA Team operator on $destinationServer"
     }
     catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating The DBA Team operator on $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating The DBA Team operator on $destinationServer. The Error was: $error"
     }
 
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to apply $scriptPath + 'scripts\' + 'alerts.sql' to $destinationServer" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to apply $scriptPath + 'scripts\' + 'alerts.sql' to $destinationServer"
 
     try
     {        
-        Invoke-DbaQuery -SqlInstance $destinationServer -File $scriptPath + 'scripts\' + 'alerts.sql'
+        Invoke-DbaQuery -SqlInstance $destinationSQLConnection -File $scriptPath + 'scripts\' + 'alerts.sql'
         
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully applied $scriptPath + 'scripts\' + 'alerts.sql' to $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully applied $scriptPath + 'scripts\' + 'alerts.sql' to $destinationServer"
     }
     catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error applying $scriptPath + 'scripts\' + 'alerts.sql' to $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy agent jobs from $sourceServer to $destinationServer. The Error was: $error"
     }
 }
 
-if($null -eq (Get-DbaDatabase -SqlInstance $destinationServer -Database $adminDatabase))
+if($null -eq (Get-DbaDatabase -SqlInstance $destinationSQLConnection -Database $adminDatabase))
 {
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create $adminDatabase on $destinationServer" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create $adminDatabase on $destinationServer"
 
     try {
 
-        New-DbaDatabase -SqlInstance $destinationServer -Name $adminDatabase
+        New-DbaDatabase -SqlInstance $destinationSQLConnection -Name $adminDatabase
         
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $adminDatabase on $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $adminDatabase on $destinationServer. The Error was: $error"
     }
     catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating $adminDatabase on $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating $adminDatabase on $destinationServer. The Error was: $error"
     }
 }
 
-if($null -eq (Get-DbaDbSchema -SqlInstance $destinationServer -Database $adminDatabase -Schema 'DBA'))
+if($null -eq (Get-DbaDbSchema -SqlInstance $destinationSQLConnection -Database $adminDatabase -Schema 'DBA'))
 {
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create schema DBA in $adminDatabase on $destinationServer" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create schema DBA in $adminDatabase on $destinationServer"
 
     try {
 
-        New-DbaDbSchema -SqlInstance $destinationServer -Database $adminDatabase -Schema 'DBA'
+        New-DbaDbSchema -SqlInstance $destinationSQLConnection -Database $adminDatabase -Schema 'DBA'
         
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Succesfully created schema DBA in $adminDatabase on $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created schema DBA in $adminDatabase on $destinationServer. The Error was: $error"
     }
     catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
-    }
-}
-
-if($null -eq(Get-DbaDbTable -SqlInstance $destinationServer -Database $adminDatabase -Table 'AgentJobEnabledStatus' -Schema 'dbo'))
-{
-    $columns = @()
-
-    $columns += @{
-         Name      = 'ID'
-         Type      = 'int'
-         Identity  = $true
-    }
-    $columns += @{
-        Name      = 'AuditDate'
-        Type      = 'datetime'
-        Nullable  = $true
-   }
-    $columns += @{
-        Name      = 'AGRole'
-        Type      = 'nvarchar'
-        MaxLength = 60
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'JobID'
-        Type      = 'nvarchar'
-        MaxLength = 36
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'JobName'
-        Type      = 'sysname'
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'ID'
-        Type      = 'varchar'
-        MaxLength = 3
-        Nullable  = $true
-    }
-
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
-
-    try
-    {
-        New-DbaDbTable -SqlInstance $destinationServer -Database $adminDatabase -Name 'AgentJobEnabledStatus' -Schema = 'DBA' -ColumnMap $columns
-        
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
-    }
-    catch
-    {
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
-    }
-}
-
-###
-
-if($null -eq(Get-DbaDbTable -SqlInstance $destinationServer -Database $adminDatabase -Table 'AgentJobEnabledStatus' -Schema 'dbo'))
-{
-
-    # CREATE TABLE DBA.TempDBSpaceRequests(
-    #     session_id smallint NULL,
-    #     request_id int NULL,
-    #     task_alloc_MB numeric(10, 1) NULL,
-    #     task_dealloc_MB numeric(10, 1) NULL,
-    #     task_alloc_GB numeric(10, 1) NULL,
-    #     task_dealloc_GB numeric(10, 1) NULL,
-    #     host nvarchar(128) NULL,
-    #     login_name nvarchar(128) NULL,
-    #     status nvarchar(30) NULL,
-    #     last_request_start_time datetime NULL,
-    #     last_request_end_time datetime NULL,
-    #     row_count bigint NULL,
-    #     transaction_isolation_level smallint NULL,
-    #     query_text nvarchar(max) NULL,
-    #     query_plan xml NULL,
-    #     PollDate datetime NOT NULL
-    # ) ON PRIMARY TEXTIMAGE_ON PRIMARY
-
-    $columns = @()
-
-    $columns += @{
-         Name      = 'session_id'
-         Type      = 'smallint'
-    }
-    $columns += @{
-        Name      = 'request_id'
-        Type      = 'int'
-   }
-    $columns += @{
-        Name      = 'task_alloc_MB'
-        Type      = 'numeric'
-        Precision = 10
-
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'task_dealloc_MB'
-        Type      = 'nvarchar'
-        MaxLength = 36
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'host'
-        Type      = 'sysname'
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'login_name'
-        Type      = 'varchar'
-        MaxLength = 3
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'status'
-        Type      = 'varchar'
-        MaxLength = 3
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'last_request_start_time'
-        Type      = 'varchar'
-        MaxLength = 3
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'last_request_end_time'
-        Type      = 'varchar'
-        MaxLength = 3
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'row_count'
-        Type      = 'varchar'
-        MaxLength = 3
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'transaction_isolation_level'
-        Type      = 'varchar'
-        MaxLength = 3
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'query_text'
-        Type      = 'varchar'
-        MaxLength = 3
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'query_plan'
-        Type      = 'varchar'
-        MaxLength = 3
-        Nullable  = $true
-    }
-    $columns += @{
-        Name      = 'PollDate'
-        Type      = 'varchar'
-        MaxLength = 3
-        Nullable  = $true
-    }
-
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
-
-    try {
-
-        New-DbaDbTable -SqlInstance $destinationServer -Database $adminDatabase -Name 'TempDBSpaceRequests' -Schema = 'DBA' -ColumnMap $columns
-        
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
-    }
-    catch {
-
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating schema DBA in $adminDatabase on $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating schema DBA in $adminDatabase on $destinationServer. The Error was: $error"
     }
 }
 
@@ -596,20 +437,68 @@ $vendorScripts = @('olaHallengren.sql','brentScripts.sql','spWho.sql')
 
 foreach($script in $vendorScripts)
 {
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create $script in $adminDatabase" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create $script in $adminDatabase"
 
     try {
 
-        Invoke-DbaQuery -SqlInstance $destinationServer -File $scriptPath + 'scripts\' + $script -Database $adminDatabase
+        if($script -eq 'olaHallengren.sql' -and $true -eq $doIHaveInternet)
+        {
+            $mainSoloutionParams = @{
+
+                SqlInstance = $destinationSQLConnection
+                Database = $adminDatabase
+                ReplaceExisting = $true
+                InstallJobs = $true
+                LogToTable = $true
+                BackupLocation = '\\rjah\dfs\SQL-Included'
+                Verbose = $true
+            }
+
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Internet connection available, installing $script from the web" -ForegroundColor Yellow
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Internet connection available, installing $script from the web"
+
+            try {
+
+                Install-DbaMaintenanceSolution @mainSoloutionParams
+                Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $script in $adminDatabase" -ForegroundColor Green
+                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $script in $adminDatabase."
+
+            }
+            catch
+            {
+                Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error adding $script to $adminDatabase" -ForegroundColor Red
+                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error adding $script to $adminDatabase. The Error was: $error"
+            }
+        }
+        elseif($script -eq 'brenScripts.sql' -and $true -eq $doIHaveInternet) 
+        {
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Internet connection available, installing $script from the web" -ForegroundColor Yellow
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Internet connection available, installing $script from the web"
+
+            try {
+                Install-DbaFirstResponderKit -SqlInstance $destinationSQLConnection -Database $adminDatabase
+                Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $script in $adminDatabase" -ForegroundColor Green
+                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $script in $adminDatabase."
+            }
+            catch
+            {
+                Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error adding $script to $adminDatabase" -ForegroundColor Red
+                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error adding $script to $adminDatabase. The Error was: $error"
+            }
+        }
+        else {
+            Invoke-DbaQuery -SqlInstance $destinationSQLConnection -File $scriptPath + 'scripts\' + $script -Database $adminDatabase
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $script in $adminDatabase" -ForegroundColor Green
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $script in $adminDatabase."
+        }
         
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+        
 
     } catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - There was an error creating $script in $adminDatabase" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - There was an error creating $script in $adminDatabase. The Error was: $error"
     }
 }
 
@@ -619,32 +508,43 @@ $availabilityGroupJobs = @('DBA: CompareDAGAgentJobDefinitions','DBA: DatabaseSy
 #Last but not least create some jobs 
 if($null -ne $availabilityGroup)
 {
+
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - $destinationServer is part of an availability group, attempting to create ag specific jobs." -ForegroundColor Green
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - $destinationServer is part of an availability group, attempting to create ag specific jobs."
+
     foreach($agJob in $availabilityGroupJobs) {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create $agJob" -ForegroundColor Yellow
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create $agJob"
 
         try {
 
-            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-            New-DbaAgentJob -SqlInstance $destinationServer -Job $agJob -EmailLevel OnFailure -EmailOperator 'The DBA Team'
+            New-DbaAgentJob -SqlInstance $destinationSQLConnection -Job $agJob -EmailLevel OnFailure -EmailOperator 'The DBA Team'
+            
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $agJob" -ForegroundColor Green
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $agJob"
             
         }
         catch {
 
-            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating $agJob" -ForegroundColor Red
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $agJob. The Error was: $error"
         }
+
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create job step, availability check in $agJob" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create job step, Primary Instance Check in $agJob"
 
         try {            
 
-            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-            New-DbaAgentJobStep -SqlInstance $destinationServer -Job $agJob -StepName 'Primary Instance Check' -Command '' -Database msdb
+            New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Primary Instance Check' -Command 'SELECT ars.role_desc FROM sys.dm_hadr_availability_replica_states AS ars INNER JOIN sys.availability_groups AS ag ON ars.group_id = ag.group_id WHERE ars.is_local = 1' -Database msdb
+            
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created job step, Primary Instance Check in $agJob" -ForegroundColor Green
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created job step, Primary Instance Check in $agJob"
         }
         catch {
 
-            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob" -ForegroundColor Red
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob. The Error was: $error"
         }
 
     }
@@ -652,37 +552,20 @@ if($null -ne $availabilityGroup)
 
 foreach($job in $sqlAgentJobs) {
 
-    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create $job on $destinationServer" -ForegroundColor Yellow
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create $job on $destinationServer"
 
     try {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-        New-DbaAgentJob -SqlInstance $destinationServer -Job $job -EmailLevel OnFailure -EmailOperator 'The DBA Team'
+        New-DbaAgentJob -SqlInstance $destinationSQLConnection -Job $job -EmailLevel OnFailure -EmailOperator 'The DBA Team'
+        
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $job on $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $job on $destinationServer"
 
     } 
     catch {
 
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
-    }
-
-    if($null -ne $availabilityGroup)
-    {
-
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Yellow
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - MaxDop has been set on this server"
-
-        try {     
-
-            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Green
-            New-DbaAgentJobStep -SqlInstance $destinationServer -Job $job -StepName 'Primary Instance Check' -Command '' -Database msdb
-
-        } 
-        catch {
-
-            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Server being configured: $destinationServer" -ForegroundColor Red
-            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Unable to delete old log files from '$logFullPath'. The Error was: $error"
-        }
-    }
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating $job on $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating $job on $destinationServer. The Error was: $error"
+    }           
 }
