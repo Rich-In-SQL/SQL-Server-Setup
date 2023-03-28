@@ -12,10 +12,10 @@ Param(
     [Parameter(Mandatory=$True, Position=3, ValueFromPipeline=$false)]
     [System.String]
     $operatorEmail,
-    [Parameter(Mandatory=$True, Position=3, ValueFromPipeline=$false)]
+    [Parameter(Mandatory=$True, Position=4, ValueFromPipeline=$false)]
     [System.String]
     $logFileDirectory,
-    [Parameter(Mandatory=$True, Position=3, ValueFromPipeline=$false)]
+    [Parameter(Mandatory=$True, Position=5, ValueFromPipeline=$false)]
     [System.String]
     $dataFileDirectory
 )
@@ -37,6 +37,15 @@ $sqlCredential = $host.ui.PromptForCredential("Please enter your credentials", "
 
 $sourceSQLConnection = Connect-DbaInstance -SqlInstance $sourceServer -SqlCredential $sqlCredential
 $destinationSQLConnection = Connect-DbaInstance -SqlInstance $destinationServer -SqlCredential $sqlCredential
+
+$availableDisks = Get-DbaDiskSpace -ComputerName $destinationSQLConnection -Credential $sqlCredential | Select-Object -Property Name
+
+if($availableDisks | Where-Object Name -ne $logFileDirectory -or $availableDisks | Where-Object Name -ne $dataFileDirectory)
+{
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - $logFileDirectory or $dataFileDirectory was not found on $destinationServer" -ForegroundColor Red
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - $logFileDirectory or $dataFileDirectory was not found on $destinationServer"
+    return
+}
 
 $doIHaveInternet = ((Test-NetConnection www.google.com -Port 80 -InformationLevel "Detailed").TcpTestSucceeded)
 
@@ -341,6 +350,74 @@ if($sourceServer -ne $null) {
         Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying database mail configuration from $sourceServer to $destinationServer. The Error was: $error"  
     }
 
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy Agent Job Category from $sourceServer to $destinationServer" -ForegroundColor Green
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy Agent Job Category from $sourceServer to $destinationServer"
+
+    try {
+        
+        Copy-DbaAgentJobCategory -Source $SourceSqlCredential -Destination $destinationServer
+
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied Agent Job Category's from $sourceServer to $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied Agent Job Category's from $sourceServer to $destinationServer"
+
+    }
+    catch {
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying agent job category's from $sourceServer to $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying agent job category's from $sourceServer to $destinationServer. The Error was: $error"  
+    }
+
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy linked servers from $sourceServer to $destinationServer" -ForegroundColor Green
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy linked servers from $sourceServer to $destinationServer"
+
+    try {
+
+        Copy-DbaLinkedServer -Source $SourceSqlCredential -Destination $destinationServer
+
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied linked servers from $sourceServer to $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied linked servers from $sourceServer to $destinationServer"
+
+    }
+    catch
+    {
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying linked servers from $sourceServer to $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying linked servers from $sourceServer to $destinationServer. The Error was: $error"  
+    }
+
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy Custom error's from $sourceServer to $destinationServer" -ForegroundColor Green
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy Custom error's from $sourceServer to $destinationServer"
+
+    try {
+        
+        Copy-DbaCustomError -Source $SourceSqlCredential -Destination $destinationServer
+
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied custom error's from $sourceServer to $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied custom error's from $sourceServer to $destinationServer"
+
+    }
+    catch
+    {
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying custom error's from $sourceServer to $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying custom error's from $sourceServer to $destinationServer. The Error was: $error"  
+    }
+
+    Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy Agent Alerts from $sourceServer to $destinationServer" -ForegroundColor Green
+    Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy Agent Alerts from $sourceServer to $destinationServer"
+
+    try {
+
+        Copy-DbaAgentAlert -Source $SourceSqlCredential -Destination $destinationServer
+
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied Agent Alerts from $sourceServer to $destinationServer" -ForegroundColor Green
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied Agent Alerts from $sourceServer to $destinationServer"
+
+    }
+    catch
+    {
+        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying Agent Alerts from $sourceServer to $destinationServer" -ForegroundColor Red
+        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error copying Agent Alerts from $sourceServer to $destinationServer. The Error was: $error"  
+    }
+
+
     Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy database mail operator from $sourceServer to $destinationServer" -ForegroundColor Yellow
     Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to copy database mail operator from $sourceServer to $destinationServer"
 
@@ -492,8 +569,6 @@ foreach($script in $vendorScripts)
             Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $script in $adminDatabase" -ForegroundColor Green
             Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $script in $adminDatabase."
         }
-        
-        
 
     } catch {
 
@@ -502,8 +577,8 @@ foreach($script in $vendorScripts)
     }
 }
 
-$sqlAgentJobs = @('_MAINT_Manage Agent Job History','DBA: Manage Agent Job History','DBA: TempDBSpaceMonitoring','DBA: WhoIsActive_WMICPUAlert','_MAINT_sp_WhoIsActive Data Collection','DBA: Check Database Mail State','DBA: DatabaseSpaceTracking','DBA: GetInstanceCPUUsage','DBA: IndexOpsExcludedDBs','DBA: IndexOpsSpaceRequirements',)
-$availabilityGroupJobs = @('DBA: CompareDAGAgentJobDefinitions','DBA: DatabaseSyncStatus','DBA: ReviewAgentJobConfig')
+$sqlAgentJobs = @('_MAINT_Manage Agent Job History','DBA: Manage Agent Job History','DBA: TempDBSpaceMonitoring','DBA: WhoIsActive_WMICPUAlert','_MAINT_sp_WhoIsActive Data Collection','DBA: Check Database Mail State','DBA: DatabaseSpaceTracking','DBA: GetInstanceCPUUsage','DBA: IndexOpsExcludedDBs','DBA: IndexOpsSpaceRequirements')
+$availabilityGroupJobs = @('DBA: CompareDAGAgentJobDefinitions','DBA: DatabaseSyncStatus','DBA: ReviewAgentJobConfig','_MAINT_CopyAgLogins')
 
 #Last but not least create some jobs 
 if($null -ne $availabilityGroup)
@@ -517,7 +592,7 @@ if($null -ne $availabilityGroup)
         Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create $agJob" -ForegroundColor Yellow
         Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create $agJob"
 
-        try {
+        try {           
 
             New-DbaAgentJob -SqlInstance $destinationSQLConnection -Job $agJob -EmailLevel OnFailure -EmailOperator 'The DBA Team'
             
@@ -534,19 +609,30 @@ if($null -ne $availabilityGroup)
         Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create job step, availability check in $agJob" -ForegroundColor Green
         Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create job step, Primary Instance Check in $agJob"
 
-        try {            
-
+        try { 
+            
             New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Primary Instance Check' -Command 'SELECT ars.role_desc FROM sys.dm_hadr_availability_replica_states AS ars INNER JOIN sys.availability_groups AS ag ON ars.group_id = ag.group_id WHERE ars.is_local = 1' -Database msdb
             
             Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created job step, Primary Instance Check in $agJob" -ForegroundColor Green
             Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created job step, Primary Instance Check in $agJob"
+            
+            if($agJob -eq 'DBA: CompareDAGAgentJobDefinitions')
+            {
+                New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Compare AG Agent Job Definitions' -Command 'powershell.exe -NoLogo -NonInteractive -File "$(ESCAPE_NONE(SQLLOGDIR))\..\JOBS\CompareAGJobs.ps1" -ThisServer $(ESCAPE_NONE(SRVR)) -EmailTo ' -Database msdb                
+            } elseif($agJob -eq '_MAINT_CopyAgLogins')
+            {
+                New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Copy Ag Logins' -Command 'powershell.exe -NoLogo -NonInteractive -File "$(ESCAPE_NONE(SQLLOGDIR))\..\JOBS\CopyAgLogins.ps1" -ThisServer $(ESCAPE_NONE(SRVR)) -LogFileFolder "$(ESCAPE_NONE(SQLLOGDIR))"' -Database msdb                
+            } elseif($agJob -eq '')
+            {
+                New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Availability Database Sync Check' -Command 'EXEC [DBA].[AvailabilityDatabaseSyncCheck]' -Database $adminDatabase
+            }
+            
         }
         catch {
 
             Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob" -ForegroundColor Red
             Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob. The Error was: $error"
         }
-
     }
 }
 
@@ -562,6 +648,19 @@ foreach($job in $sqlAgentJobs) {
         Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $job on $destinationServer" -ForegroundColor Green
         Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $job on $destinationServer"
 
+        if ($job -eq '_MAINT_CycleErrorLog') {
+
+            New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $job -StepName 'Cycle Error Log' -Command 'Exec sys.sp_cycle_errorlog' -Database msdb                
+            New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $job -StepName 'Cycle Agent Error Log' -Command 'Exec dbo.sp_cycle_agent_errorlog' -Database msdb                
+        } elseif($job -eq '_MAINT_sp_WhoIsActive Data Collection')
+        {
+            New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Collect Who Is Active Data' -Command 'EXEC dbo.sp_WhoIsActive @get_transaction_info = 1,@get_outer_command = 1,@get_plans = 1,@destination_table = "DBA.DB_Administration";' -Database $adminDatabase
+            New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Remove Old Who Is Active Data' -Command 'DELETE FROM DBA.WhoIsActive WHERE collection_time < DATEADD(day,-30, GETDATE());' -Database $adminDatabase        
+        } elseif($job -eq 'DBA: DatabaseSpaceTracking')
+        {
+            New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Record TempDB Space Used' -Command 'EXEC [DBA].[Run_TempDBSpaceTracking]' -Database $adminDatabase
+        }
+
     } 
     catch {
 
@@ -569,3 +668,4 @@ foreach($job in $sqlAgentJobs) {
         Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating $job on $destinationServer. The Error was: $error"
     }           
 }
+

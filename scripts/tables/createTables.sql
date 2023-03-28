@@ -1,4 +1,4 @@
-CREATE TABLE [DBA].[UnsyncedDBs]
+CREATE TABLE [DBA].[IgnoredDatabases]
 (
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[DatabaseName] [sysname] NOT NULL
@@ -118,6 +118,10 @@ CREATE TABLE [DBA].[WhoIsActive]
 	[request_id] [int] NULL,
 	[collection_time] [datetime] NOT NULL
 );
+
+GO
+
+CREATE CLUSTERED INDEX cx_collection_time ON [DBA].[WhoIsActive] (collection_time ASC);
 
 GO
 
