@@ -1,3 +1,6 @@
+#Requires -RunAsAdministrator
+#Requires -Modules dbatools
+
 [CmdletBinding()]
 Param(
     [Parameter(Mandatory=$false, Position=0, ValueFromPipeline=$false)]
@@ -20,6 +23,8 @@ Param(
     $dataFileDirectory
 )
 
+$sqlCredential = $host.ui.PromptForCredential("Please enter your credentials", "Please enter a username and password that has admin access to the SQL server.", "", "NetBiosUserName")
+
 $adminDatabase = 'DB_Administration'
 
 $theRoot = $PSScriptRoot
@@ -33,7 +38,6 @@ $logFileLimit = (Get-Date).AddDays(-15)
 $scriptPathRoot = $theRoot
 $scriptPath = $scriptPathRoot + '\scripts\' 
 
-$sqlCredential = $host.ui.PromptForCredential("Please enter your credentials", "Please enter a username and password that has admin access to the SQL server.", "", "NetBiosUserName")
 
 $sourceSQLConnection = Connect-DbaInstance -SqlInstance $sourceServer -SqlCredential $sqlCredential
 $destinationSQLConnection = Connect-DbaInstance -SqlInstance $destinationServer -SqlCredential $sqlCredential
@@ -625,8 +629,7 @@ if($null -ne $availabilityGroup)
             } elseif($agJob -eq '')
             {
                 New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Availability Database Sync Check' -Command 'EXEC [DBA].[AvailabilityDatabaseSyncCheck]' -Database $adminDatabase
-            }
-            
+            }            
         }
         catch {
 
@@ -668,4 +671,3 @@ foreach($job in $sqlAgentJobs) {
         Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating $job on $destinationServer. The Error was: $error"
     }           
 }
-
