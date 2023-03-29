@@ -20,24 +20,27 @@ Param(
     $logFileDirectory,
     [Parameter(Mandatory=$True, Position=5, ValueFromPipeline=$false)]
     [System.String]
-    $dataFileDirectory
+    $dataFileDirectory,
+    [Parameter(Mandatory=$True, Position=6, ValueFromPipeline=$false)]
+    [System.String]
+    $adminDatabase,
+    [Parameter(Mandatory=$True, Position=7, ValueFromPipeline=$false)]
+    [System.String]
+    $backupLocation
 )
 
 $sqlCredential = $host.ui.PromptForCredential("Please enter your credentials", "Please enter a username and password that has admin access to the SQL server.", "", "NetBiosUserName")
 
-$adminDatabase = 'DB_Administration'
-
 $theRoot = $PSScriptRoot
 
 $logDirectory = $theRoot + '\logs\'
-$logName = 'SQL-Setup-' + $destinationServer
+$logName = 'SQL-Setup-' + $destinationServer + '-'
 $logFileName = $logName + (Get-Date -f yyyy-MM-dd-HH-mm) + ".log"
 $logFullPath =  Join-Path $logDirectory $logFileName
-$logFileLimit = (Get-Date).AddDays(-15)
+$logFileLimit = (Get-Date).AddDays(-30)
 
 $scriptPathRoot = $theRoot
 $scriptPath = $scriptPathRoot + '\scripts\' 
-
 
 $sourceSQLConnection = Connect-DbaInstance -SqlInstance $sourceServer -SqlCredential $sqlCredential
 $destinationSQLConnection = Connect-DbaInstance -SqlInstance $destinationServer -SqlCredential $sqlCredential
@@ -102,7 +105,7 @@ catch {
     Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error deleting log files. The Error was: $error"
 }
 
-$dacState = Invoke-DbaQuery -SqlInstance $destinationServer -Query "SELECT value_in_use FROM sys.configurations where name = 'remote admin connections'"
+$dacState = Invoke-DbaQuery -SqlInstance $destinationSQLConnection -Query "SELECT value_in_use FROM sys.configurations where name = 'remote admin connections'"
 
 if($dacState.value_in_use -eq 0) {
 
@@ -359,7 +362,7 @@ if($sourceServer -ne $null) {
 
     try {
         
-        Copy-DbaAgentJobCategory -Source $SourceSqlCredential -Destination $destinationServer
+        Copy-DbaAgentJobCategory -Source $SourceSqlCredential -Destination $destinationSQLConnection
 
         Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied Agent Job Category's from $sourceServer to $destinationServer" -ForegroundColor Green
         Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied Agent Job Category's from $sourceServer to $destinationServer"
@@ -375,7 +378,7 @@ if($sourceServer -ne $null) {
 
     try {
 
-        Copy-DbaLinkedServer -Source $SourceSqlCredential -Destination $destinationServer
+        Copy-DbaLinkedServer -Source $SourceSqlCredential -Destination $destinationSQLConnection
 
         Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied linked servers from $sourceServer to $destinationServer" -ForegroundColor Green
         Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied linked servers from $sourceServer to $destinationServer"
@@ -392,7 +395,7 @@ if($sourceServer -ne $null) {
 
     try {
         
-        Copy-DbaCustomError -Source $SourceSqlCredential -Destination $destinationServer
+        Copy-DbaCustomError -Source $SourceSqlCredential -Destination $destinationSQLConnection
 
         Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied custom error's from $sourceServer to $destinationServer" -ForegroundColor Green
         Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied custom error's from $sourceServer to $destinationServer"
@@ -409,7 +412,7 @@ if($sourceServer -ne $null) {
 
     try {
 
-        Copy-DbaAgentAlert -Source $SourceSqlCredential -Destination $destinationServer
+        Copy-DbaAgentAlert -Source $SourceSqlCredential -Destination $destinationSQLConnection
 
         Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied Agent Alerts from $sourceServer to $destinationServer" -ForegroundColor Green
         Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully copied Agent Alerts from $sourceServer to $destinationServer"
@@ -532,7 +535,7 @@ foreach($script in $vendorScripts)
                 ReplaceExisting = $true
                 InstallJobs = $true
                 LogToTable = $true
-                BackupLocation = '\\rjah\dfs\SQL-Included'
+                BackupLocation = $backupLocation
                 Verbose = $true
             }
 
@@ -541,10 +544,10 @@ foreach($script in $vendorScripts)
 
             try {
 
-                Install-DbaMaintenanceSolution @mainSoloutionParams
+                Install-DbaMaintenanceSolution @mainSoloutionParams -Database $adminDatabase -SqlCredential $sqlCredential -LogToTable -InstallJobs
                 Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $script in $adminDatabase" -ForegroundColor Green
-                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $script in $adminDatabase."
 
+                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $script in $adminDatabase."
             }
             catch
             {
@@ -581,7 +584,7 @@ foreach($script in $vendorScripts)
     }
 }
 
-$sqlAgentJobs = @('_MAINT_Manage Agent Job History','DBA: Manage Agent Job History','DBA: TempDBSpaceMonitoring','DBA: WhoIsActive_WMICPUAlert','_MAINT_sp_WhoIsActive Data Collection','DBA: Check Database Mail State','DBA: DatabaseSpaceTracking','DBA: GetInstanceCPUUsage','DBA: IndexOpsExcludedDBs','DBA: IndexOpsSpaceRequirements')
+$sqlAgentJobs = @('DBA: Send Email Alerts','_MAINT_Manage Agent Job History','DBA: Manage Agent Job History','DBA: TempDBSpaceMonitoring','DBA: WhoIsActive_WMICPUAlert','_MAINT_sp_WhoIsActive Data Collection','DBA: Check Database Mail State','DBA: DatabaseSpaceTracking','DBA: GetInstanceCPUUsage','DBA: IndexOpsExcludedDBs','DBA: IndexOpsSpaceRequirements')
 $availabilityGroupJobs = @('DBA: CompareDAGAgentJobDefinitions','DBA: DatabaseSyncStatus','DBA: ReviewAgentJobConfig','_MAINT_CopyAgLogins')
 
 #Last but not least create some jobs 
@@ -646,22 +649,106 @@ foreach($job in $sqlAgentJobs) {
 
     try {
 
-        New-DbaAgentJob -SqlInstance $destinationSQLConnection -Job $job -EmailLevel OnFailure -EmailOperator 'The DBA Team'
         
-        Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $job on $destinationServer" -ForegroundColor Green
-        Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $job on $destinationServer"
 
         if ($job -eq '_MAINT_CycleErrorLog') {
 
-            New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $job -StepName 'Cycle Error Log' -Command 'Exec sys.sp_cycle_errorlog' -Database msdb                
-            New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $job -StepName 'Cycle Agent Error Log' -Command 'Exec dbo.sp_cycle_agent_errorlog' -Database msdb                
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create step Cycle Error Log in $job on $destinationServer" -ForegroundColor Yellow
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create step Cycle Error Log in $job on $destinationServer"
+
+            try {
+                New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $job -StepName 'Cycle Error Log' -Command 'Exec sys.sp_cycle_errorlog' -Database msdb                
+            }
+            catch {
+                Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob" -ForegroundColor Red
+                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob. The Error was: $error"
+            }
+
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create step Cycle Agent Error Log in $job on $destinationServer" -ForegroundColor Yellow
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create step Cycle Agent Error Log in $job on $destinationServer"
+            
+            try {
+                
+                New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $job -StepName 'Cycle Agent Error Log' -Command 'Exec dbo.sp_cycle_agent_errorlog' -Database msdb                
+            }
+            catch
+            {
+                Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob" -ForegroundColor Red
+                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob. The Error was: $error"
+            }
+
         } elseif($job -eq '_MAINT_sp_WhoIsActive Data Collection')
         {
-            New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Collect Who Is Active Data' -Command 'EXEC dbo.sp_WhoIsActive @get_transaction_info = 1,@get_outer_command = 1,@get_plans = 1,@destination_table = "DBA.DB_Administration";' -Database $adminDatabase
-            New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Remove Old Who Is Active Data' -Command 'DELETE FROM DBA.WhoIsActive WHERE collection_time < DATEADD(day,-30, GETDATE());' -Database $adminDatabase        
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create step Collect Who Is Active Data in $job on $destinationServer" -ForegroundColor Yellow
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create step Collect Who Is Active Data in $job on $destinationServer"
+
+            try {
+                
+                New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Collect Who Is Active Data' -Command 'EXEC dbo.sp_WhoIsActive @get_transaction_info = 1,@get_outer_command = 1,@get_plans = 1,@destination_table = "DBA.DB_Administration";' -Database $adminDatabase
+            }
+            catch {
+                Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob" -ForegroundColor Red
+                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob. The Error was: $error"
+            }
+
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create step Remove Old Who Is Active Data in $job on $destinationServer" -ForegroundColor Yellow
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create step Remove Old Who Is Active Data in $job on $destinationServer"
+
+            try {
+
+                New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Remove Old Who Is Active Data' -Command 'DELETE FROM DBA.WhoIsActive WHERE collection_time < DATEADD(day,-30, GETDATE());' -Database $adminDatabase        
+            }
+            catch {
+                Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob" -ForegroundColor Red
+                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob. The Error was: $error"
+            }
+            
         } elseif($job -eq 'DBA: DatabaseSpaceTracking')
         {
-            New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Record TempDB Space Used' -Command 'EXEC [DBA].[Run_TempDBSpaceTracking]' -Database $adminDatabase
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create step Remove Record TempDB Space Used in $job on $destinationServer" -ForegroundColor Yellow
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create step Remove Record TempDB Space Used in $job on $destinationServer"
+
+            try {
+                
+                New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Record TempDB Space Used' -Command 'EXEC [DBA].[Run_TempDBSpaceTracking]' -Database $adminDatabase
+            }
+            catch
+            {
+                Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob" -ForegroundColor Red
+                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob. The Error was: $error"
+            }
+        } elseif($job -eq 'DBA: Send Email Alerts')
+        {
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create step Send Email Notifications in $job on $destinationServer" -ForegroundColor Yellow
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create step Send Email Notifications in $job on $destinationServer"
+
+            try {
+                
+                New-DbaAgentJobStep -SqlInstance $destinationSQLConnection -Job $agJob -StepName 'Send Email Notifications' -Command 'EXEC [DBA].[Send_Email_Notifications]' -Database $adminDatabase
+
+            }
+            catch {
+                Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob" -ForegroundColor Red
+                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating job step, Primary Instance Check in $agJob. The Error was: $error"
+            }
+        } else 
+        {
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create $job on $destinationServer" -ForegroundColor Green
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Attempting to create $job on $destinationServer"
+
+            try
+            {
+                New-DbaAgentJob -SqlInstance $destinationSQLConnection -Job $job -EmailLevel OnFailure -EmailOperator 'The DBA Team'
+
+            } catch {
+
+                Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating $job on $destinationServer" -ForegroundColor Red
+                Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Error creating $job on $destinationServer. The Error was: $error"
+
+            }
+        
+            Write-Host -Message "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $job on $destinationServer" -ForegroundColor Green
+            Add-Content -Path $logFullPath -Value "$(Get-Date -f yyyy-MM-dd-HH-mm) - Sucessfully created $job on $destinationServer"
         }
 
     } 

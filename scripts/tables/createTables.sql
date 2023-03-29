@@ -231,6 +231,20 @@ CREATE TABLE [DBA].[JobHistory_Archive](
 	[Date_Added] [datetime] NULL,
 	[ModifiedByLogin] [varchar](150) NOT NULL,
 	[ModifiedByUser] [varchar](150) NOT NULL
-) ON [PRIMARY]
+);
 
 GO
+
+CREATE TABLE [DBA].[EmailNotifications](
+	[Notification_ID] [int] IDENTITY(1,1) NOT NULL,
+	[MailBody] [nvarchar](max) NULL,
+	[MailFormat] [varchar](5) NULL,
+	[MailSubject] [nvarchar](4000) NULL,
+	[MailRecipients] [nvarchar](100) NULL,
+    [CC_MailRecipients] [nvarchar](100) NULL,
+	[MailRequested] [datetime] NULL DEFAULT GETDATE(),
+	[MailDelivered] [datetime] NULL,
+	[Delivered] [bit] NULL DEFAULT 0
+);
+
+ALTER TABLE [DBA].[EmailNotifications] ADD CONSTRAINT PK_Notifications_ID PRIMARY KEY (Notification_ID);

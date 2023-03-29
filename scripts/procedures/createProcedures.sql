@@ -1,9 +1,3 @@
-SET ANSI_NULLS ON
-GO
-
-SET QUOTED_IDENTIFIER ON
-GO
-
 CREATE PROCEDURE [DBA].[GetInstanceCPUUsage]
 
 AS
@@ -52,11 +46,14 @@ SET NOCOUNT ON;
             AND [record] LIKE '%<SystemHealth>%'
         ) AS x
     ) AS y
+	
 	LEFT JOIN [DBA].[InstanceCPUUsage] u
 		ON y.[record_id] = u.[RecordID]
+	
 	WHERE 
 		u.[RecordID] IS NULL 
 		AND (DATEADD(ms, - 1 * (@ms_ticks_now - [timestamp]), GETDATE()) > DATEADD(mi,-15,GETDATE()))
+	
 	ORDER BY 
 		y.[record_id] DESC
 
@@ -331,25 +328,33 @@ SET NOCOUNT ON;
 					  END AS [OnFailureAction]
 				FROM
 					[msdb].[dbo].[sysjobs] AS [sJOB]
+					
 					LEFT JOIN [msdb].[sys].[servers] AS [sSVR]
 						ON [sJOB].[originating_server_id] = [sSVR].[server_id]
+					
 					LEFT JOIN [msdb].[dbo].[syscategories] AS [sCAT]
 						ON [sJOB].[category_id] = [sCAT].[category_id]
+					
 					LEFT JOIN [msdb].[dbo].[sysjobsteps] AS [sJSTP]
 						ON [sJOB].[job_id] = [sJSTP].[job_id]
-						--AND [sJOB].[start_step_id] = [sJSTP].[step_id]
+				   
 				   LEFT JOIN [msdb].[dbo].[sysjobsteps] AS [sOSSTP]
 						ON [sJSTP].[job_id] = [sOSSTP].[job_id]
 						AND [sJSTP].[on_success_step_id] = [sOSSTP].[step_id]
+					
 					LEFT JOIN [msdb].[dbo].[sysjobsteps] AS [sOFSTP]
 						ON [sJSTP].[job_id] = [sOFSTP].[job_id]
 						AND [sJSTP].[on_fail_step_id] = [sOFSTP].[step_id]
+					
 					LEFT JOIN [msdb].[dbo].[sysproxies] AS [sPROX]
 						ON [sJSTP].[proxy_id] = [sPROX].[proxy_id]
+					
 					LEFT JOIN [master].[sys].[server_principals] AS [sDBP]
 						ON [sJOB].[owner_sid] = [sDBP].[sid]
+					
 					LEFT JOIN [msdb].[dbo].[sysjobschedules] AS [sJOBSCH]
 						ON [sJOB].[job_id] = [sJOBSCH].[job_id]
+					
 					LEFT JOIN [msdb].[dbo].[sysschedules] AS [sSCH]
 						ON [sJOBSCH].[schedule_id] = [sSCH].[schedule_id]
 			END
@@ -525,88 +530,109 @@ SET NOCOUNT ON;
 					INTO  #AgentJobDetailsLog
 				FROM
 					[msdb].[dbo].[sysjobs] AS [sJOB]
+					
 					LEFT JOIN [msdb].[sys].[servers] AS [sSVR]
 						ON [sJOB].[originating_server_id] = [sSVR].[server_id]
+					
 					LEFT JOIN [msdb].[dbo].[syscategories] AS [sCAT]
 						ON [sJOB].[category_id] = [sCAT].[category_id]
+					
 					LEFT JOIN [msdb].[dbo].[sysjobsteps] AS [sJSTP]
 						ON [sJOB].[job_id] = [sJSTP].[job_id]
-				   LEFT JOIN [msdb].[dbo].[sysjobsteps] AS [sOSSTP]
+				   	
+					LEFT JOIN [msdb].[dbo].[sysjobsteps] AS [sOSSTP]
 						ON [sJSTP].[job_id] = [sOSSTP].[job_id]
-						AND [sJSTP].[on_success_step_id] = [sOSSTP].[step_id]
+					AND [sJSTP].[on_success_step_id] = [sOSSTP].[step_id]
+					
 					LEFT JOIN [msdb].[dbo].[sysjobsteps] AS [sOFSTP]
 						ON [sJSTP].[job_id] = [sOFSTP].[job_id]
 						AND [sJSTP].[on_fail_step_id] = [sOFSTP].[step_id]
+					
 					LEFT JOIN [msdb].[dbo].[sysproxies] AS [sPROX]
 						ON [sJSTP].[proxy_id] = [sPROX].[proxy_id]
+					
 					LEFT JOIN [master].[sys].[server_principals] AS [sDBP]
 						ON [sJOB].[owner_sid] = [sDBP].[sid]
+					
 					LEFT JOIN [msdb].[dbo].[sysjobschedules] AS [sJOBSCH]
 						ON [sJOB].[job_id] = [sJOBSCH].[job_id]
+					
 					LEFT JOIN [msdb].[dbo].[sysschedules] AS [sSCH]
 						ON [sJOBSCH].[schedule_id] = [sSCH].[schedule_id]
 			IF EXISTS
 			(
 			SELECT 
-				  lower([JobName])[JobName]
-				  ,[JobOwner]
-				  ,[JobCategory]
-				  ,lower([JobDescription])[JobDescription]
-				  ,[JobStartStepNo]
-				  ,lower([JobStartStepName])[JobStartStepName]
-				  ,[IsScheduled]
-				  ,lower([JobScheduleName])[JobScheduleName]
-				  ,[JobDeletionCriterion]
-				  ,[ScheduleType]
-				  ,[Occurrence]
-				  ,[Recurrence]
-				  ,[Frequency]
-				  ,[ScheduleUsageEndDate]
-				  ,[StepNo]
-				  ,lower([StepName])[StepName]
-				  ,lower([StepType])[StepType]
-				  ,[RunAs]
-				  ,lower([Database])[Database]
-				  ,[OnSuccessAction]
-				  ,[RetryAttempts]
-				  ,[RetryInterval (Minutes)]
-				  ,[OnFailureAction]
-				  ,CASE when lower([ExecutableCommand]) is not null then 1 else 0 end as [ExecutableCommand]
-				  ,lower([JobDescription])[JobDescription]
-				  ,lower([ExecutableCommand]) [ExecutableCommand]
-			  FROM [DBA].[AgentJobDetailsLog]
-			  WHERE CAST([AuditDate] AS DATE) = cast(getdate() as date)
+				lower([JobName])[JobName]
+				,[JobOwner]
+				,[JobCategory]
+				,lower([JobDescription])[JobDescription]
+				,[JobStartStepNo]
+				,lower([JobStartStepName])[JobStartStepName]
+				,[IsScheduled]
+				,lower([JobScheduleName])[JobScheduleName]
+				,[JobDeletionCriterion]
+				,[ScheduleType]
+				,[Occurrence]
+				,[Recurrence]
+				,[Frequency]
+				,[ScheduleUsageEndDate]
+				,[StepNo]
+				,lower([StepName])[StepName]
+				,lower([StepType])[StepType]
+				,[RunAs]
+				,lower([Database])[Database]
+				,[OnSuccessAction]
+				,[RetryAttempts]
+				,[RetryInterval (Minutes)]
+				,[OnFailureAction]
+				,CASE 
+					WHEN lower([ExecutableCommand]) IS NOT NULL THEN 1 
+					ELSE 0 
+				END AS [ExecutableCommand]
+				,lower([JobDescription])[JobDescription]
+				,lower([ExecutableCommand]) [ExecutableCommand]
+			  FROM 
+			  	[DBA].[AgentJobDetailsLog]
+			  WHERE 
+			  	CAST([AuditDate] AS DATE) = cast(getdate() as date)
 			  AND [JobName] NOT IN ('')
-			  except
+			  
+			  EXCEPT
+			  
 			  SELECT 
-				  lower([JobName])[JobName]
-				  ,[JobOwner]
-				  ,[JobCategory]
-				  ,lower([JobDescription])[JobDescription]
-				  ,[JobStartStepNo]
-				  ,lower([JobStartStepName])[JobStartStepName]
-				  ,[IsScheduled]
-				  ,lower([JobScheduleName])[JobScheduleName]
-				  ,[JobDeletionCriterion]
-				  ,[ScheduleType]
-				  ,[Occurrence]
-				  ,[Recurrence]
-				  ,[Frequency]
-				  ,[ScheduleUsageEndDate]
-				  ,[StepNo]
-				  ,lower([StepName])[StepName]
-				  ,lower([StepType])[StepType]
-				  ,[RunAs]
-				  ,lower([Database])[Database]
-				  ,[OnSuccessAction]
-				  ,[RetryAttempts]
-				  ,[RetryInterval (Minutes)]
-				  ,[OnFailureAction]
-				  ,CASE when lower([ExecutableCommand]) is not null then 1 else 0 end as [ExecutableCommand]
-				  ,lower([JobDescription])[JobDescription]
-				  ,lower([ExecutableCommand]) [ExecutableCommand]
-			  FROM #AgentJobDetailsLog
-			  WHERE [JobName] NOT IN ('')
+				lower([JobName])[JobName]
+				,[JobOwner]
+				,[JobCategory]
+				,lower([JobDescription])[JobDescription]
+				,[JobStartStepNo]
+				,lower([JobStartStepName])[JobStartStepName]
+				,[IsScheduled]
+				,lower([JobScheduleName])[JobScheduleName]
+				,[JobDeletionCriterion]
+				,[ScheduleType]
+				,[Occurrence]
+				,[Recurrence]
+				,[Frequency]
+				,[ScheduleUsageEndDate]
+				,[StepNo]
+				,lower([StepName])[StepName]
+				,lower([StepType])[StepType]
+				,[RunAs]
+				,lower([Database])[Database]
+				,[OnSuccessAction]
+				,[RetryAttempts]
+				,[RetryInterval (Minutes)]
+				,[OnFailureAction]
+				,CASE 
+					WHEN lower([ExecutableCommand]) IS NOT NULL THEN 1 
+					ELSE 0 
+				END AS [ExecutableCommand]
+				,lower([JobDescription])[JobDescription]
+				,lower([ExecutableCommand]) [ExecutableCommand]
+			  FROM 
+			  	#AgentJobDetailsLog
+			  WHERE 
+			  	[JobName] NOT IN ('')
 			)
 			OR EXISTS(
 			  SELECT 
@@ -682,12 +708,8 @@ SET NOCOUNT ON;
 					SET @To = ''
 					SET @Cc = ''
 
-					EXEC msdb.dbo.sp_send_dbmail
-					@Profile_name = '',
-					@Recipients = @To,
-					@Copy_recipients = @Cc,
-   					@Subject = @Subject,
-   					@Body = @Body;
+					EXEC [DBA].[Insert_Email_Notifications] @Body = @Body, @sub = @Subject, @recipient = @To, @format = 'HTML', @copy_recipients = @Cc;
+
 			END
 		 END
 	END TRY
@@ -767,10 +789,20 @@ BEGIN
 
 	SET NOCOUNT ON;
 
-DECLARE @tableHTML nvarchar(MAX),@body nvarchar(MAX),@ServerName SYSNAME, @MemberState nvarchar(100),@AGName nvarchar(100),@Sub nvarchar(500)
+DECLARE 
+	@tableHTML nvarchar(MAX),
+	@body nvarchar(MAX),
+	@ServerName SYSNAME, 
+	@MemberState nvarchar(100),
+	@AGName nvarchar(100),
+	@Sub nvarchar(500),
+	@To nvarchar(200),
+	@cc_To nvarchar(200)
 
 SET @ServerName = @@SERVERNAME 
 SET @Sub = 'Availability Group Health Alert For ' + @ServerName
+SET @To = ''
+SET @cc_To = ''
 
 SELECT 
 @MemberState = ARS.role_desc,
@@ -833,14 +865,7 @@ WHERE
 				
 				set @tableHTML = '<div style="color:Black; font-size:11pt; font-family:Calibri; width:100px;">' + @tableHTML + '</div>'		
 
-				EXEC msdb.dbo.sp_send_dbmail
-						@profile_name = '',				
-						@body = @tableHTML,  
-						@importance = 'High',          
-						@body_format = 'HTML',
-						@subject =  @sub,
-						@recipients = '',
-						@copy_recipients = ''
+				EXEC [DBA].[Insert_Email_Notifications] @Body = @tableHTML, @sub = @sub, @recipient = @To, @format = 'HTML', @copy_recipients = @Cc_To
 
 			END
 END
@@ -1186,14 +1211,148 @@ AS
 		SET @To = ''
 		SET @Cc = ''
 
-		EXEC msdb.dbo.sp_send_dbmail
-			@Recipients = @To,
-   			@Subject = @Subject,
-   			@Body = @Body,
-   			@body_format ='HTML',
-			@copy_recipients = @Cc 
+		EXEC [DBA].[Insert_Email_Notifications] @Body = @Body, @sub = @Subject, @recipient = @To, @format = 'HTML', @copy_recipients = @cc
 
 		IF OBJECT_ID('tempdb..#syncCheck','U') IS NOT NULL
 		DROP TABLE #syncDbChk
 
+	END;
+
+GO
+
+CREATE PROCEDURE [DBA].[Insert_Email_Notifications]
+
+AS
+
+DECLARE 
+	@Body nvarchar(2000),
+	@format varchar(5),
+	@sub nvarchar(100),
+	@recipient nvarchar(100),
+	@cc_recipient nvarchar(100)
+
+BEGIN	
+
+	INSERT INTO DBA.Email_notifications 
+	(
+		[MailBody]
+		,[MailFormat]
+		,[MailSubject]
+		,[MailRecipients]
+		,[CC_MailRecipients]		
+	)
+	VALUES
+	(	@Body
+		,@format
+		,@sub
+		,@recipient
+		,@cc_recipient		
+	)
+
+END;
+
+GO
+
+CREATE PROCEDURE [DBA].[Send_Email_Notifications]
+
+AS
+
+DECLARE 
+	@Body nvarchar(2000),
+	@format varchar(5),
+	@sub nvarchar(100),
+    @maxID INT, 
+    @cnt INT, 
+	@rcnt INT,
+    @notificationID INT,    
+	@Email nvarchar(100),
+	@cc_Email nvarchar(100),	
+	@mailState INT
+
+BEGIN
+	SET NOCOUNT ON;	
+
+    CREATE TABLE #notifications 
+    (
+        ID INT IDENTITY (1,1)
+        ,NotificationID INT
+        ,MailBody nvarchar(MAX)
+        ,MailFormat VARCHAR(5)
+        ,MailSubject varchar(4000)
+        ,Recipient nvarchar(1000)
+		,cc_Recipient nvarchar(1000)
+    );
+
+    INSERT INTO #notifications 
+	(
+		NotificationID
+		,MailBody
+		,MailFormat
+		,MailSubject
+		,Recipient
+		,cc_recipient
+		)
+    SELECT 
+		Notification_ID
+		,MailBody
+		,MailFormat
+		,MailSubject
+		,MailRecipients
+		,cc_Recipient
+	FROM 
+		[DBA].[Email_notifications]
+	WHERE Delivered = 0
+
+	SET @cnt = 1
+
+    SET @maxID = (SELECT MAX(ID) FROM #notifications)
+	SET @rcnt = (SELECT COUNT(ID) FROM #notifications)
+
+	IF @rcnt >= 1
+
+	BEGIN
+
+    WHILE @cnt <= @maxID
+
+		BEGIN
+
+			SET @notificationID = (SELECT notificationID FROM #notifications WHERE ID = @cnt)
+		
+			SELECT 
+			@Body = MailBody
+			,@format = MailFormat
+			,@sub = MailSubject
+			,@Email = Recipient
+			,@cc_Email = cc_recipient
+			FROM 
+				#notifications
+			WHERE 
+				ID = @cnt 		
+
+			EXEC @mailState = msdb.dbo.sp_send_dbmail
+			@profile_name = '',
+			@body_format = 'HTML',
+			@body = @Body,           
+			@subject = @sub,
+			@recipients = @Email,
+			@copy_recipients = @cc_Email
+
+			IF (@mailState = 0)
+			BEGIN
+				UPDATE DBA.Email_notifications  
+				SET 
+					Delivered = 1, 
+					MailDelivered = GETDATE()
+				WHERE 
+					Notification_ID = @notificationID
+			END
+
+			SET @cnt = @cnt + 1 
+
+		END
+
 	END
+
+END	
+
+DROP TABLE #notifications
