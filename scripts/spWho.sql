@@ -21,7 +21,7 @@ Docs: http://whoisactive.com
 License:
     https://github.com/amachanic/sp_whoisactive/blob/master/LICENSE
 *********************************************************************************************/
-ALTER PROC dbo.sp_WhoIsActive
+CREATE PROC dbo.sp_WhoIsActive
 (
 --~
     --Filters--Both inclusive and exclusive

@@ -1,5 +1,3 @@
-USE [msdb]
-GO
 EXEC msdb.dbo.sp_add_alert @name=N'Severity 016',
 @message_id=0,
 @severity=16,
